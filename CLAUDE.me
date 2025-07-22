@@ -1,0 +1,173 @@
+# Guidelines for Developing ZMK Modules
+
+This document outlines the process and best practices for developing modules for ZMK Firmware, specifically focusing on display widgets.
+
+## Module Structure
+
+### 1. File Organization
+
+For a new widget module, create two main files:
+- Header file (`.h`): Contains widget structure definitions and function declarations
+- Implementation file (`.c`): Contains the actual implementation of the widget
+
+### 2. Widget Header Structure
+
+```c
+/*
+ * Copyright (c) 2024 The ZMK Contributors
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#pragma once
+
+#include <lvgl.h>
+#include <zephyr/kernel.h>
+
+struct zmk_widget_your_module {
+    sys_snode_t node;        // Required for linking in the widget system
+    lv_obj_t *obj;           // Main LVGL object
+    lv_obj_t *specific_item; // Any additional LVGL objects needed
+};
+
+// Widget initialization function
+int zmk_widget_your_module_init(struct zmk_widget_your_module *widget, lv_obj_t *parent);
+
+// Widget object accessor function
+lv_obj_t *zmk_widget_your_module_obj(struct zmk_widget_your_module *widget);
+```
+
+### 3. Widget Implementation Structure
+
+```c
+/*
+ * Copyright (c) 2024 The ZMK Contributors
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
+
+#include <zmk/display.h>
+#include "your_module.h"
+
+// Static list to maintain all instances of this widget
+static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
+
+// For reactive widgets that update based on events:
+// Event handler and state management functions would go here
+
+int zmk_widget_your_module_init(struct zmk_widget_your_module *widget, lv_obj_t *parent) {
+    // Create the main container object
+    widget->obj = lv_obj_create(parent);
+    
+    // Set size appropriate to the widget's content
+    lv_obj_set_size(widget->obj, width, height);
+    
+    // Create additional LVGL objects
+    widget->specific_item = lv_create_something(widget->obj);
+    
+    // Set initial content
+    lv_set_something(widget->specific_item, initial_value);
+    
+    // Position objects within the widget
+    lv_obj_align(widget->specific_item, alignment, x_offset, y_offset);
+    
+    // Add the widget to the global list
+    sys_slist_append(&widgets, &widget->node);
+    
+    // Initialize any event handlers or state tracking
+    
+    return 0;
+}
+
+lv_obj_t *zmk_widget_your_module_obj(struct zmk_widget_your_module *widget) {
+    return widget->obj;
+}
+```
+
+## Integration Steps
+
+### 1. Add Configuration Options
+
+For configurable widgets, add options to the Kconfig.defconfig file:
+
+```
+config ZMK_YOUR_MODULE_OPTION
+    string "Configuration option for your module"
+```
+
+### 2. Update Status Screen
+
+In custom_status_screen.c:
+
+1. Include your widget header:
+```c
+#include "widgets/your_module.h"
+```
+
+2. Declare the widget instance:
+```c
+static struct zmk_widget_your_module your_module_widget;
+```
+
+3. Add conditional compilation if needed:
+```c
+#if IS_ENABLED(CONFIG_ZMK_YOUR_MODULE_OPTION)
+static struct zmk_widget_your_module your_module_widget;
+#endif
+```
+
+4. Initialize and position the widget in the display function:
+```c
+zmk_widget_your_module_init(&your_module_widget, screen);
+lv_obj_align(zmk_widget_your_module_obj(&your_module_widget), LV_ALIGN_POSITION, x_offset, y_offset);
+```
+
+## Best Practices
+
+1. **Consistent Naming**:
+   - Follow the `zmk_widget_your_module` naming convention for all functions and structures
+   - Keep naming consistent across all files
+
+2. **Memory Management**:
+   - Minimize memory usage as embedded systems have limited resources
+   - Use static allocation when possible
+
+3. **Responsive Design**:
+   - Position widgets using LVGL's alignment tools to accommodate different screen sizes
+   - Consider using relative positioning with LV_ALIGN_OUT_X_Y for widget placement
+
+4. **Event Handling**:
+   - For widgets that need to react to system events, use the ZMK event subscription system
+   - Follow the pattern seen in widgets like modifiers.c for event handling
+
+5. **Conditional Compilation**:
+   - Use #if IS_ENABLED() or #if IS_EMPTY() for configuration-dependent code
+   - Make modules configurable when appropriate
+
+## Example: Device Name Widget
+
+The device name widget demonstrates a simple static text display with the following features:
+
+1. Simple structure with a container object and label
+2. Configuration-driven content (CONFIG_ZMK_DONGLE_DISPLAY_NAME)
+3. Conditional compilation based on configuration presence
+4. Proper positioning within the status screen
+5. Standard accessor patterns for LVGL objects
+
+This is a minimal widget implementation that can serve as a starting point for more complex widgets.
+
+## Creating Reactive Widgets
+
+For widgets that need to react to system events:
+
+1. Define a state structure to track relevant data
+2. Create update callback functions
+3. Use the ZMK_DISPLAY_WIDGET_LISTENER macro to register listeners
+4. Subscribe to relevant ZMK events using ZMK_SUBSCRIPTION
+5. Update the widget's visual elements when events occur
+
+See the modifiers.c implementation for a complete example of a reactive widget.

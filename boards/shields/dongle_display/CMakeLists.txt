@@ -14,5 +14,6 @@ if(CONFIG_ZMK_DISPLAY AND CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM AND ((NOT CONF
     zephyr_library_sources(widgets/modifiers.c)
     zephyr_library_sources(widgets/modifiers_sym.c)
     zephyr_library_sources(widgets/output_status.c)
+    zephyr_library_sources(widgets/device_name.c)
     zephyr_library_sources(widgets/output_status_sym.c)
 endif()

@@ -21,6 +21,11 @@ static struct zmk_widget_dongle_battery_status dongle_battery_status_widget;
 static struct zmk_widget_modifiers modifiers_widget;
 static struct zmk_widget_bongo_cat bongo_cat_widget;
 
+#if IS_EMPTY(CONFIG_ZMK_DONGLE_DISPLAY_NAME) == false
+#include "widgets/device_name.h"
+static struct zmk_widget_device_name device_name_widget;
+#endif
+
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
 static struct zmk_widget_hid_indicators hid_indicators_widget;
 #endif
@@ -44,8 +49,14 @@ lv_obj_t *zmk_display_status_screen() {
     zmk_widget_bongo_cat_init(&bongo_cat_widget, screen);
     lv_obj_align(zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_BOTTOM_RIGHT, 0, -7);
 
+#if IS_EMPTY(CONFIG_ZMK_DONGLE_DISPLAY_NAME) == false
+    zmk_widget_device_name_init(&device_name_widget, screen);
+    lv_obj_align(zmk_widget_device_name_obj(&device_name_widget), LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+#endif
+
     zmk_widget_modifiers_init(&modifiers_widget, screen);
-    lv_obj_align(zmk_widget_modifiers_obj(&modifiers_widget), LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    //lv_obj_align(zmk_widget_modifiers_obj(&modifiers_widget), LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_align(zmk_widget_modifiers_obj(&modifiers_widget), LV_ALIGN_BOTTOM_LEFT, 0, -7);
 
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
     zmk_widget_hid_indicators_init(&hid_indicators_widget, screen);
@@ -53,8 +64,8 @@ lv_obj_t *zmk_display_status_screen() {
 #endif
 
     zmk_widget_layer_status_init(&layer_status_widget, screen);
-    // lv_obj_align(zmk_widget_layer_status_obj(&layer_status_widget), LV_ALIGN_BOTTOM_LEFT, 2, -18);
-    lv_obj_align_to(zmk_widget_layer_status_obj(&layer_status_widget), zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_BOTTOM_LEFT, 0, 5);
+    lv_obj_align(zmk_widget_layer_status_obj(&layer_status_widget), LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    // lv_obj_align_to(zmk_widget_layer_status_obj(&layer_status_widget), zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_BOTTOM_LEFT, 0, 5);
 
     zmk_widget_dongle_battery_status_init(&dongle_battery_status_widget, screen);
     lv_obj_align(zmk_widget_dongle_battery_status_obj(&dongle_battery_status_widget), LV_ALIGN_TOP_RIGHT, 0, 0);
