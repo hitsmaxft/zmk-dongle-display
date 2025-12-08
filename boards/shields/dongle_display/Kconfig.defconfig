@@ -38,6 +38,14 @@ config ZMK_DONGLE_DISPLAY_PADDING_RIGHT
     default 0
     range 0 20
 
+config ZMK_DONGLE_DISPLAY_BONGO_CAT
+    bool "Show bongo cat widget"
+    default y
+
+config ZMK_DONGLE_DISPLAY_MODIFIERS
+    bool "Show modifiers widget"
+    default y
+
 choice ZMK_DISPLAY_WORK_QUEUE
     default ZMK_DISPLAY_WORK_QUEUE_DEDICATED
 endchoice
