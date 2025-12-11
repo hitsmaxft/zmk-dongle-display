@@ -58,4 +58,16 @@ choice LV_COLOR_DEPTH
     default LV_COLOR_DEPTH_1
 endchoice
 
+config DONGLE_DISPLAY_HORIZONTAL
+    bool "Screen orientation"
+    default y
+    help
+      Orientation of the screen. In default it is horizontal (laying on the side)
+
+config DONGLE_DISPLAY_FLIPPED
+    bool "Screen flip option"
+    default n
+    help
+      Should the screen orientation should be flipped in horizontal or vertical orientation?
+
 endif
