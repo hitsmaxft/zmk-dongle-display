@@ -16,6 +16,10 @@ static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 int zmk_widget_device_name_init(struct zmk_widget_device_name *widget, lv_obj_t *parent) {
     widget->obj = lv_obj_create(parent);
 
+    // Set transparent background for LVGL 9.0 compatibility
+    lv_obj_set_style_bg_opa(widget->obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(widget->obj, 0, LV_PART_MAIN);
+
     lv_obj_set_size(widget->obj, 64, 11);
     
     widget->label = lv_label_create(widget->obj);
