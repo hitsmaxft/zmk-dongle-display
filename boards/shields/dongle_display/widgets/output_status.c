@@ -167,6 +167,10 @@ ZMK_SUBSCRIPTION(widget_output_status, zmk_usb_conn_state_changed);
 int zmk_widget_output_status_init(struct zmk_widget_output_status *widget, lv_obj_t *parent) {
     widget->obj = lv_obj_create(parent);
 
+    // Set transparent background for LVGL 9.0 compatibility
+    lv_obj_set_style_bg_opa(widget->obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(widget->obj, 0, LV_PART_MAIN);
+
     lv_obj_set_size(widget->obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 
     lv_obj_t *usb = lv_img_create(widget->obj);

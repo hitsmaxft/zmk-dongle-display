@@ -136,6 +136,10 @@ int zmk_widget_bongo_cat_init(struct zmk_widget_bongo_cat *widget, lv_obj_t *par
     widget->obj = lv_animimg_create(parent);
     lv_obj_center(widget->obj);
 
+    // Set transparent background for LVGL 9.0 compatibility
+    lv_obj_set_style_bg_opa(widget->obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(widget->obj, 0, LV_PART_MAIN);
+
     sys_slist_append(&widgets, &widget->node);
 
     widget_bongo_cat_init();
