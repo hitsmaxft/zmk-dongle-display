@@ -38,6 +38,40 @@ config ZMK_DONGLE_DISPLAY_PADDING_RIGHT
     default 0
     range 0 20
 
+config ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+    bool "Enable the generic multi-animation engine"
+    default n
+
+config ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+    bool "Use an animation provider from ZMK_CONFIG"
+    default n
+    select ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_HEADER
+    string "Animation provider header relative to ZMK_CONFIG"
+    default ""
+    depends on ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
+    bool "Generate the animation provider during the build"
+    default n
+    depends on ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATOR
+    string "Provider generator relative to ZMK_CONFIG"
+    default ""
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_CACHE_DIR
+    string "Generated provider cache directory relative to ZMK_CONFIG"
+    default "../.build/_graphs"
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_ROTATE_ON_WAKE
+    bool "Request the next animation pack after display wake"
+    default n
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
 choice ZMK_DISPLAY_WORK_QUEUE
     default ZMK_DISPLAY_WORK_QUEUE_DEDICATED
 endchoice

@@ -1,0 +1,5 @@
+description: Request the next fighter on the dongle display
+
+compatible: "zmk,behavior-fighter-next"
+
+include: zero_param.yaml

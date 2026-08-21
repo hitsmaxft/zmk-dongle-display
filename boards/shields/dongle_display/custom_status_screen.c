@@ -7,7 +7,11 @@
 #include "custom_status_screen.h"
 #include "widgets/battery_status.h"
 #include "widgets/modifiers.h"
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
+#include "widgets/animation.h"
+#else
 #include "widgets/bongo_cat.h"
+#endif
 #include "widgets/layer_status.h"
 #include "widgets/output_status.h"
 #include "widgets/hid_indicators.h"
@@ -26,11 +30,10 @@ static struct zmk_widget_dongle_battery_status dongle_battery_status_widget;
 
 static struct zmk_widget_layer_status layer_status_widget;
 static struct zmk_widget_modifiers modifiers_widget;
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
+static struct zmk_widget_dongle_animation animation_widget;
+#else
 static struct zmk_widget_bongo_cat bongo_cat_widget;
-
-#if IS_EMPTY(CONFIG_ZMK_DONGLE_DISPLAY_NAME) == false
-#include "widgets/device_name.h"
-static struct zmk_widget_device_name device_name_widget;
 #endif
 
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
@@ -41,6 +44,7 @@ lv_style_t global_style;
 
 lv_obj_t *zmk_display_status_screen() {
     lv_obj_t *screen;
+    lv_obj_t *status_panel;
 
     lv_style_init(&global_style);
 
@@ -56,37 +60,49 @@ lv_obj_t *zmk_display_status_screen() {
     
     lv_obj_add_style(screen, &global_style, LV_PART_MAIN);
 
-    // Also set the background color directly on the screen object
-    // lv_obj_set_style_bg_color(screen, lv_color_black(), LV_PART_MAIN);
-    // lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
-    
-    zmk_widget_output_status_init(&output_status_widget, screen);
-    lv_obj_align(zmk_widget_output_status_obj(&output_status_widget), LV_ALIGN_TOP_LEFT, PADDING_LEFT, 0);
-    
-    zmk_widget_bongo_cat_init(&bongo_cat_widget, screen);
-    lv_obj_align(zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_BOTTOM_RIGHT, -PADDING_RIGHT, -7);
+    /* Keep every status widget clipped to the left half of the 128x64 panel. */
+    status_panel = lv_obj_create(screen);
+    lv_obj_remove_style_all(status_panel);
+    lv_obj_set_size(status_panel, 64, 64);
+    lv_obj_align(status_panel, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_clear_flag(status_panel, LV_OBJ_FLAG_SCROLLABLE);
 
-#if IS_EMPTY(CONFIG_ZMK_DONGLE_DISPLAY_NAME) == false
-    zmk_widget_device_name_init(&device_name_widget, screen);
-    lv_obj_align(zmk_widget_device_name_obj(&device_name_widget), LV_ALIGN_BOTTOM_RIGHT, -PADDING_RIGHT, 0);
+    zmk_widget_output_status_init(&output_status_widget, status_panel);
+    lv_obj_align(zmk_widget_output_status_obj(&output_status_widget), LV_ALIGN_TOP_LEFT,
+                 PADDING_LEFT, 0);
+    
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
+    int animation_err = zmk_widget_dongle_animation_init(&animation_widget, screen);
+    if (animation_err < 0) {
+        LOG_ERR("Failed to initialize dongle animation: %d", animation_err);
+    } else {
+        lv_obj_align(zmk_widget_dongle_animation_obj(&animation_widget), LV_ALIGN_TOP_RIGHT, 0,
+                     0);
+    }
+#else
+    zmk_widget_bongo_cat_init(&bongo_cat_widget, screen);
+    lv_obj_align(zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_TOP_RIGHT, 0, 0);
 #endif
 
-    zmk_widget_modifiers_init(&modifiers_widget, screen);
-    //lv_obj_align(zmk_widget_modifiers_obj(&modifiers_widget), LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_obj_align(zmk_widget_modifiers_obj(&modifiers_widget), LV_ALIGN_BOTTOM_LEFT, PADDING_LEFT, -7);
+    zmk_widget_modifiers_init(&modifiers_widget, status_panel);
+    lv_obj_align(zmk_widget_modifiers_obj(&modifiers_widget), LV_ALIGN_TOP_LEFT, PADDING_LEFT,
+                 37);
 
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
-    zmk_widget_hid_indicators_init(&hid_indicators_widget, screen);
-    lv_obj_align_to(zmk_widget_hid_indicators_obj(&hid_indicators_widget), zmk_widget_modifiers_obj(&modifiers_widget), LV_ALIGN_OUT_TOP_LEFT, PADDING_LEFT, -2);
+    zmk_widget_hid_indicators_init(&hid_indicators_widget, status_panel);
+    lv_obj_align(zmk_widget_hid_indicators_obj(&hid_indicators_widget), LV_ALIGN_TOP_RIGHT, 0,
+                 56);
 #endif
 
-    zmk_widget_layer_status_init(&layer_status_widget, screen);
-    lv_obj_align(zmk_widget_layer_status_obj(&layer_status_widget), LV_ALIGN_BOTTOM_LEFT, PADDING_LEFT, 0);
-    // lv_obj_align_to(zmk_widget_layer_status_obj(&layer_status_widget), zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_BOTTOM_LEFT, 0, 5);
+    zmk_widget_layer_status_init(&layer_status_widget, status_panel);
+    lv_obj_set_width(zmk_widget_layer_status_obj(&layer_status_widget), 32);
+    lv_obj_align(zmk_widget_layer_status_obj(&layer_status_widget), LV_ALIGN_TOP_LEFT,
+                 PADDING_LEFT, 56);
 
 #if IS_ENABLED(CONFIG_ZMK_BATTERY)
     zmk_widget_dongle_battery_status_init(&dongle_battery_status_widget, screen);
-    lv_obj_align(zmk_widget_dongle_battery_status_obj(&dongle_battery_status_widget), LV_ALIGN_TOP_RIGHT, -PADDING_RIGHT, 0);
+    lv_obj_align(zmk_widget_dongle_battery_status_obj(&dongle_battery_status_widget),
+                 LV_ALIGN_TOP_RIGHT, -PADDING_RIGHT, 0);
 #endif
 
     return screen;
