@@ -62,10 +62,27 @@ config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATOR
     default ""
     depends on ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
 
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATOR_ARGS
+    string "Provider generator arguments"
+    default ""
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
+
 config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_CACHE_DIR
     string "Generated provider cache directory relative to ZMK_CONFIG"
     default "../.build/_graphs"
     depends on ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_ROM_MAX_BYTES
+    int "Optional maximum total linked ROM bytes with custom animations"
+    default 0
+    range 0 2147483647
+    depends on ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+    help
+      When nonzero, fail the final link if complete firmware ROM usage exceeds
+      this empirical startup-safety budget. This limits the linked image as a
+      whole, not merely the generated animation bitmap payload. Set this to
+      zero to disable the guard for unrestricted capacity or optimization
+      testing.
 
 config ZMK_DONGLE_DISPLAY_ANIMATION_ROTATE_ON_WAKE
     bool "Request the next animation pack after display wake"

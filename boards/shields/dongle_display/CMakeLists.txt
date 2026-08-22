@@ -35,8 +35,14 @@ if(CONFIG_ZMK_DISPLAY AND CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM AND ((NOT CONF
                     message(FATAL_ERROR
                         "Dongle animation provider generator not found: ${DONGLE_ANIMATION_PROVIDER_GENERATOR}")
                 endif()
+                set(DONGLE_ANIMATION_PROVIDER_GENERATOR_ARGS)
+                if(NOT "${CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATOR_ARGS}" STREQUAL "")
+                    separate_arguments(DONGLE_ANIMATION_PROVIDER_GENERATOR_ARGS NATIVE_COMMAND
+                        "${CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATOR_ARGS}")
+                endif()
                 execute_process(
                     COMMAND ${PYTHON_EXECUTABLE} "${DONGLE_ANIMATION_PROVIDER_GENERATOR}"
+                            ${DONGLE_ANIMATION_PROVIDER_GENERATOR_ARGS}
                             --output "${DONGLE_ANIMATION_PROVIDER_HEADER}"
                     RESULT_VARIABLE DONGLE_ANIMATION_PROVIDER_RESULT
                     OUTPUT_VARIABLE DONGLE_ANIMATION_PROVIDER_OUTPUT
