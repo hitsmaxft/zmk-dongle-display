@@ -43,9 +43,12 @@ config ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
     default n
 
 config ZMK_DONGLE_DISPLAY_FIGHTER_PACK
-    bool "Include the built-in Fighter animation pack"
+    bool "Include the built-in Fighter theme demo pack"
     default y
     depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION && !ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+    help
+      Demonstrate Fighter layering, battle HUD, and selective per-step movement
+      while reusing the existing Bongo Cat image descriptors and bitmap data.
 
 config ZMK_DONGLE_DISPLAY_BATTLE_BATTERY_LEFT_SOURCE
     int "Peripheral battery source shown on the left battle HUD"

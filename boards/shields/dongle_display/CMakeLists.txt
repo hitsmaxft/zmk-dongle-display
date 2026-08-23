@@ -70,7 +70,6 @@ if(CONFIG_ZMK_DISPLAY AND CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM AND ((NOT CONF
             endif()
         else()
             zephyr_library_sources(widgets/bongo_cat_images.c)
-            zephyr_library_sources_ifdef(CONFIG_ZMK_DONGLE_DISPLAY_FIGHTER_PACK widgets/fighter_images.c)
         endif()
     else()
         zephyr_library_sources(widgets/bongo_cat.c)

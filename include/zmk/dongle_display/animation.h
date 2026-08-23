@@ -12,8 +12,9 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/util_macro.h>
 
-#define ZMK_DONGLE_ANIMATION_PROVIDER_ABI_VERSION 3
+#define ZMK_DONGLE_ANIMATION_PROVIDER_ABI_VERSION 6
 #define ZMK_DONGLE_ANIMATION_MAX_FRAMES 127
+#define ZMK_DONGLE_ANIMATION_NO_RETURN_STEP UINT8_MAX
 
 enum zmk_dongle_animation_motion {
     ZMK_DONGLE_ANIMATION_MOTION_NONE = 0,
@@ -29,10 +30,13 @@ enum zmk_dongle_animation_motion {
 struct zmk_dongle_animation_action {
     const char *name;
     const void *const *frames;
+    const uint8_t *movement_steps;
+    const int8_t *frame_x_offsets;
     uint8_t frame_count;
     uint32_t duration_ms;
     uint8_t motion;
     uint8_t flags;
+    uint8_t return_step;
     uint16_t endpoint_hold_ms;
 };
 
@@ -61,8 +65,9 @@ extern const struct zmk_dongle_animation_registry zmk_dongle_animation_registry;
 
 void zmk_widget_dongle_animation_request_next(void);
 
-#define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_TIMING_DEFINE_COUNT(                                  \
-    _id, _frames, _count, _duration_ms, _endpoint_hold_ms, _motion, _flags)                       \
+#define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_MOVEMENT_RETURN_TIMING_DEFINE_COUNT(                  \
+    _id, _frames, _movement_steps, _return_step, _count, _duration_ms, _endpoint_hold_ms,        \
+    _motion, _flags)                                                                              \
     _Static_assert((_count) > 0, #_id " must contain at least one frame");                       \
     _Static_assert((_count) <= ZMK_DONGLE_ANIMATION_MAX_FRAMES,                                  \
                    #_id " exceeds LVGL pic_count");                                             \
@@ -93,12 +98,47 @@ void zmk_widget_dongle_animation_request_next(void);
     static const struct zmk_dongle_animation_action _id = {                                      \
         .name = #_id,                                                                            \
         .frames = (_frames),                                                                      \
+        .movement_steps = (_movement_steps),                                                       \
+        .frame_x_offsets = NULL,                                                                   \
         .frame_count = (_count),                                                                  \
         .duration_ms = (_duration_ms),                                                            \
         .motion = (_motion),                                                                       \
         .flags = (_flags),                                                                         \
+        .return_step = (_return_step),                                                             \
         .endpoint_hold_ms = (_endpoint_hold_ms),                                                   \
     }
+
+#define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_OFFSETS_DEFINE(                                \
+    _id, _frames, _frame_x_offsets, _middle_frame_ms, _endpoint_hold_ms, _flags)                  \
+    _Static_assert(ARRAY_SIZE(_frame_x_offsets) == ARRAY_SIZE(_frames),                           \
+                   #_id " frame offset table must match its frame count");                      \
+    _Static_assert(ARRAY_SIZE(_frames) >= 2, #_id " offset cadence needs endpoint frames");      \
+    _Static_assert(ARRAY_SIZE(_frames) <= ZMK_DONGLE_ANIMATION_MAX_FRAMES,                        \
+                   #_id " exceeds LVGL pic_count");                                             \
+    static const struct zmk_dongle_animation_action _id = {                                      \
+        .name = #_id,                                                                             \
+        .frames = (_frames),                                                                      \
+        .movement_steps = NULL,                                                                   \
+        .frame_x_offsets = (_frame_x_offsets),                                                     \
+        .frame_count = ARRAY_SIZE(_frames),                                                        \
+        .duration_ms = 2U * (_endpoint_hold_ms) +                                                 \
+                       (ARRAY_SIZE(_frames) - 2U) * (_middle_frame_ms),                            \
+        .motion = ZMK_DONGLE_ANIMATION_MOTION_NONE,                                               \
+        .flags = (_flags),                                                                        \
+        .return_step = ZMK_DONGLE_ANIMATION_NO_RETURN_STEP,                                       \
+        .endpoint_hold_ms = (_endpoint_hold_ms),                                                   \
+    }
+
+#define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_MOVEMENT_TIMING_DEFINE_COUNT(                         \
+    _id, _frames, _movement_steps, _count, _duration_ms, _endpoint_hold_ms, _motion, _flags)     \
+    ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_MOVEMENT_RETURN_TIMING_DEFINE_COUNT(                       \
+        _id, _frames, _movement_steps, ZMK_DONGLE_ANIMATION_NO_RETURN_STEP, _count,              \
+        _duration_ms, _endpoint_hold_ms, _motion, _flags)
+
+#define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_TIMING_DEFINE_COUNT(                                  \
+    _id, _frames, _count, _duration_ms, _endpoint_hold_ms, _motion, _flags)                       \
+    ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_MOVEMENT_TIMING_DEFINE_COUNT(                              \
+        _id, _frames, NULL, _count, _duration_ms, _endpoint_hold_ms, _motion, _flags)
 
 #define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_DEFINE_COUNT(_id, _frames, _count, _duration_ms,       \
                                                          _motion, _flags)                           \
@@ -110,6 +150,27 @@ void zmk_widget_dongle_animation_request_next(void);
     ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_TIMING_DEFINE_COUNT(                                       \
         _id, _frames, _count,                                                                     \
         2U * (_endpoint_hold_ms) + ((_count) - 2U) * (_middle_frame_ms),                          \
+        _endpoint_hold_ms, _motion, _flags)
+
+#define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_DEFINE_COUNT(                         \
+    _id, _frames, _movement_steps, _count, _middle_frame_ms, _endpoint_hold_ms, _motion, _flags)  \
+    _Static_assert(ARRAY_SIZE(_movement_steps) == (_count),                                       \
+                   #_id " movement table must match its frame count");                          \
+    ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_MOVEMENT_TIMING_DEFINE_COUNT(                              \
+        _id, _frames, _movement_steps, _count,                                                    \
+        2U * (_endpoint_hold_ms) + ((_count) - 2U) * (_middle_frame_ms),                          \
+        _endpoint_hold_ms, _motion, _flags)
+
+#define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_RETURN_DEFINE_COUNT(                 \
+    _id, _frames, _movement_steps, _return_step, _count, _middle_frame_ms,                       \
+    _endpoint_hold_ms, _motion, _flags)                                                           \
+    _Static_assert(ARRAY_SIZE(_movement_steps) == (_count),                                       \
+                   #_id " movement table must match its frame count");                          \
+    _Static_assert((_return_step) > 0 && (_return_step) < (_count),                              \
+                   #_id " return step must be inside its frame table");                         \
+    ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_MOVEMENT_RETURN_TIMING_DEFINE_COUNT(                       \
+        _id, _frames, _movement_steps, _return_step, _count,                                     \
+        2U * (_endpoint_hold_ms) + ((_count) - 2U) * (_middle_frame_ms),                         \
         _endpoint_hold_ms, _motion, _flags)
 
 #define ZMK_DONGLE_ANIMATION_ACTION_DEFINE_COUNT(_id, _frames, _count, _duration_ms)              \
@@ -127,6 +188,19 @@ void zmk_widget_dongle_animation_request_next(void);
     _id, _frames, _middle_frame_ms, _endpoint_hold_ms, _motion, _flags)                           \
     ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_DEFINE_COUNT(                                      \
         _id, _frames, ARRAY_SIZE(_frames), _middle_frame_ms, _endpoint_hold_ms, _motion, _flags)
+
+#define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_DEFINE(                               \
+    _id, _frames, _movement_steps, _middle_frame_ms, _endpoint_hold_ms, _motion, _flags)          \
+    ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_DEFINE_COUNT(                             \
+        _id, _frames, _movement_steps, ARRAY_SIZE(_frames), _middle_frame_ms,                     \
+        _endpoint_hold_ms, _motion, _flags)
+
+#define ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_RETURN_DEFINE(                        \
+    _id, _frames, _movement_steps, _return_step, _middle_frame_ms, _endpoint_hold_ms,            \
+    _motion, _flags)                                                                               \
+    ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_RETURN_DEFINE_COUNT(                      \
+        _id, _frames, _movement_steps, _return_step, ARRAY_SIZE(_frames), _middle_frame_ms,      \
+        _endpoint_hold_ms, _motion, _flags)
 
 #define ZMK_DONGLE_ANIMATION_PACK_DEFINE(_id, _label, _actions, _bands)                           \
     _Static_assert(ARRAY_SIZE(_actions) > 0, #_id " must contain at least one action");           \

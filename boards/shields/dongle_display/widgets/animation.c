@@ -97,10 +97,53 @@ static int validate_action(const struct zmk_widget_dongle_animation *widget,
     int32_t target_x = zmk_dongle_animation_target_x(
         widget->screen_width, first_frame->header.w, action->motion);
     int32_t distance = origin_x - target_x;
+    uint8_t movement_count =
+        zmk_dongle_animation_movement_count(action->movement_steps, action->frame_count);
+    if (action->movement_steps != NULL) {
+        if (action->movement_steps[0] != 0) {
+            LOG_ERR("Animation action %s must keep its first movement step fixed", action->name);
+            return -EINVAL;
+        }
+        for (size_t index = 1; index < action->frame_count; index++) {
+            if (action->movement_steps[index] > 1) {
+                LOG_ERR("Animation action %s movement step %u is invalid", action->name,
+                        (unsigned int)index);
+                return -EINVAL;
+            }
+        }
+    }
+    if (action->frame_x_offsets != NULL &&
+        (action->movement_steps != NULL || action->motion != ZMK_DONGLE_ANIMATION_MOTION_NONE ||
+         action->return_step != ZMK_DONGLE_ANIMATION_NO_RETURN_STEP)) {
+        LOG_ERR("Animation action %s mixes explicit offsets with computed motion", action->name);
+        return -EINVAL;
+    }
+    if ((action->motion == ZMK_DONGLE_ANIMATION_MOTION_NONE &&
+         action->movement_steps != NULL) ||
+        (action->motion != ZMK_DONGLE_ANIMATION_MOTION_NONE && movement_count == 0)) {
+        LOG_ERR("Animation action %s has an incompatible movement table", action->name);
+        return -EINVAL;
+    }
+    if (action->return_step != ZMK_DONGLE_ANIMATION_NO_RETURN_STEP) {
+        if (action->movement_steps == NULL || action->return_step == 0 ||
+            action->return_step >= action->frame_count ||
+            zmk_dongle_animation_movement_count_range(
+                action->movement_steps, 1, action->return_step) == 0 ||
+            zmk_dongle_animation_movement_count_range(
+                action->movement_steps, action->return_step, action->frame_count) == 0) {
+            LOG_ERR("Animation action %s has an invalid return step", action->name);
+            return -EINVAL;
+        }
+        movement_count = MAX(
+            zmk_dongle_animation_movement_count_range(
+                action->movement_steps, 1, action->return_step),
+            zmk_dongle_animation_movement_count_range(
+                action->movement_steps, action->return_step, action->frame_count));
+    }
     if (action->motion != ZMK_DONGLE_ANIMATION_MOTION_NONE &&
-        (action->frame_count < 2 || distance < action->frame_count - 1)) {
-        LOG_ERR("Animation action %s cannot move %u frames through %dpx", action->name,
-                action->frame_count, distance);
+        (action->frame_count < 2 || distance < movement_count)) {
+        LOG_ERR("Animation action %s cannot move %u steps through %dpx", action->name,
+                movement_count, distance);
         return -ERANGE;
     }
     for (size_t index = 0; index < action->frame_count; index++) {
@@ -115,6 +158,14 @@ static int validate_action(const struct zmk_widget_dongle_animation *widget,
                     (unsigned int)index, zmk_dongle_animation_registry.canvas_width,
                     zmk_dongle_animation_registry.canvas_height);
             return -EINVAL;
+        }
+        if (action->frame_x_offsets != NULL) {
+            int32_t frame_x = origin_x + action->frame_x_offsets[index];
+            if (frame_x < 0 || frame_x + frame->header.w > widget->screen_width) {
+                LOG_ERR("Animation action %s frame %u offset leaves the screen", action->name,
+                        (unsigned int)index);
+                return -ERANGE;
+            }
         }
     }
     return 0;
@@ -165,8 +216,11 @@ static void animation_painted_cb(lv_event_t *event) {
 }
 
 static void show_frame(struct zmk_widget_dongle_animation *widget, uint8_t frame_index) {
-    int32_t x = zmk_dongle_animation_frame_x(widget->origin_x, widget->target_x,
-                                              widget->action->frame_count, frame_index);
+    int32_t x = widget->action->frame_x_offsets != NULL
+                    ? widget->origin_x + widget->action->frame_x_offsets[frame_index]
+                    : zmk_dongle_animation_frame_x_action(
+                          widget->origin_x, widget->target_x, widget->action->movement_steps,
+                          widget->action->frame_count, frame_index, widget->action->return_step);
     lv_image_set_src(widget->obj, widget->action->frames[frame_index]);
     lv_obj_set_pos(widget->obj, x, widget->origin_y);
     widget->frame_index = frame_index;

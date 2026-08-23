@@ -93,9 +93,21 @@ The header path is relative to `ZMK_CONFIG`. Include
 `ZMK_DONGLE_ANIMATION_PACK_WPM4_DEFINE`, and finish with
 `ZMK_DONGLE_ANIMATION_REGISTRY_DEFINE`. Static frame arrays derive their frame count automatically;
 every action must contain 1 to 127 LVGL image descriptors. All packs share the registry canvas size.
-The Provider ABI is version 2. Existing action macros remain source-compatible and default to no
-motion; moving layouts use `ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_DEFINE`. A custom Provider still
-owns the complete registry, so the built-in Fighter pack is not linked into custom builds.
+The Provider ABI is version 5. Existing action macros remain source-compatible and default to no
+motion; moving layouts use `ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_DEFINE`. A moving action may use
+`ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_DEFINE` with a same-length `uint8_t` table:
+zero keeps the previous X position and one advances an equal movement interval. A null table keeps
+the previous behavior in which every frame after the first advances. A custom Provider still owns
+the complete registry, so built-in packs are not linked into custom builds.
+For a single forward-then-return action,
+`ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_RETURN_DEFINE` adds one return-step boundary.
+Moving steps before it divide travel to the target; moving steps from it onward divide travel back
+to the origin. Per-step data remains only zero/fixed or one/move, with no coordinate script.
+
+Without a custom Provider, `CONFIG_ZMK_DONGLE_DISPLAY_FIGHTER_PACK` adds the built-in `Fighter
+Demo` pack. It reuses the linked Bongo Cat image descriptors while exercising fullscreen Fighter
+layers, the battle HUD, and selective per-frame movement; `fighter_images.c` is not compiled for
+this demo.
 
 `config/animations/example_provider.h` in the consuming ZMK config is a complete one-frame example.
 No CMake file or module-source change is needed.

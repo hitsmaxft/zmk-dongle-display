@@ -73,17 +73,122 @@ static inline int32_t zmk_dongle_animation_target_x(int32_t screen_width,
     return origin;
 }
 
-static inline int32_t zmk_dongle_animation_frame_x(int32_t origin_x, int32_t target_x,
-                                                    uint8_t frame_count,
-                                                    uint8_t frame_index) {
+static inline uint8_t zmk_dongle_animation_movement_count(const uint8_t *movement_steps,
+                                                           uint8_t frame_count) {
+    if (frame_count <= 1) {
+        return 0;
+    }
+    if (movement_steps == NULL) {
+        return frame_count - 1;
+    }
+
+    uint8_t count = 0;
+    for (uint8_t index = 1; index < frame_count; index++) {
+        count += movement_steps[index] != 0;
+    }
+    return count;
+}
+
+static inline uint8_t zmk_dongle_animation_movement_index(const uint8_t *movement_steps,
+                                                           uint8_t frame_count,
+                                                           uint8_t frame_index) {
+    if (frame_count <= 1 || frame_index == 0) {
+        return 0;
+    }
+    if (frame_index >= frame_count) {
+        frame_index = frame_count - 1;
+    }
+    if (movement_steps == NULL) {
+        return frame_index;
+    }
+
+    uint8_t count = 0;
+    for (uint8_t index = 1; index <= frame_index; index++) {
+        count += movement_steps[index] != 0;
+    }
+    return count;
+}
+
+static inline uint8_t zmk_dongle_animation_movement_count_range(
+    const uint8_t *movement_steps, uint8_t first, uint8_t end) {
+    uint8_t count = 0;
+    for (uint8_t index = first; index < end; index++) {
+        count += movement_steps == NULL || movement_steps[index] != 0;
+    }
+    return count;
+}
+
+static inline int32_t zmk_dongle_animation_frame_x_return(
+    int32_t origin_x, int32_t target_x, const uint8_t *movement_steps,
+    uint8_t frame_count, uint8_t frame_index, uint8_t return_step) {
+    if (frame_count <= 1 || frame_index == 0 || origin_x <= target_x ||
+        return_step == 0 || return_step >= frame_count) {
+        return origin_x;
+    }
+    if (frame_index >= frame_count) {
+        frame_index = frame_count - 1;
+    }
+
+    int32_t distance = origin_x - target_x;
+    if (frame_index < return_step) {
+        uint8_t count = zmk_dongle_animation_movement_count_range(
+            movement_steps, 1, return_step);
+        uint8_t index = zmk_dongle_animation_movement_count_range(
+            movement_steps, 1, frame_index + 1);
+        if (count == 0) {
+            return origin_x;
+        }
+        return origin_x - ((distance * index + count / 2) / count);
+    }
+
+    uint8_t count = zmk_dongle_animation_movement_count_range(
+        movement_steps, return_step, frame_count);
+    uint8_t index = zmk_dongle_animation_movement_count_range(
+        movement_steps, return_step, frame_index + 1);
+    if (count == 0) {
+        return target_x;
+    }
+    return target_x + ((distance * index + count / 2) / count);
+}
+
+static inline int32_t zmk_dongle_animation_frame_x_steps(int32_t origin_x, int32_t target_x,
+                                                          const uint8_t *movement_steps,
+                                                          uint8_t frame_count,
+                                                          uint8_t frame_index) {
     if (frame_count <= 1 || frame_index == 0 || origin_x <= target_x) {
         return origin_x;
     }
-    if (frame_index >= frame_count - 1) {
+
+    uint8_t movement_count =
+        zmk_dongle_animation_movement_count(movement_steps, frame_count);
+    if (movement_count == 0) {
+        return origin_x;
+    }
+    uint8_t movement_index =
+        zmk_dongle_animation_movement_index(movement_steps, frame_count, frame_index);
+    if (movement_index >= movement_count) {
         return target_x;
     }
 
     int32_t distance = origin_x - target_x;
-    int32_t intervals = frame_count - 1;
-    return origin_x - ((distance * frame_index + intervals / 2) / intervals);
+    return origin_x -
+           ((distance * movement_index + movement_count / 2) / movement_count);
+}
+
+static inline int32_t zmk_dongle_animation_frame_x_action(
+    int32_t origin_x, int32_t target_x, const uint8_t *movement_steps,
+    uint8_t frame_count, uint8_t frame_index, uint8_t return_step) {
+    if (return_step != UINT8_MAX) {
+        return zmk_dongle_animation_frame_x_return(
+            origin_x, target_x, movement_steps, frame_count, frame_index, return_step);
+    }
+    return zmk_dongle_animation_frame_x_steps(
+        origin_x, target_x, movement_steps, frame_count, frame_index);
+}
+
+static inline int32_t zmk_dongle_animation_frame_x(int32_t origin_x, int32_t target_x,
+                                                    uint8_t frame_count,
+                                                    uint8_t frame_index) {
+    return zmk_dongle_animation_frame_x_steps(origin_x, target_x, NULL, frame_count,
+                                               frame_index);
 }

@@ -14,10 +14,6 @@
 
 #else
 
-#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_FIGHTER_PACK)
-#include "fighter_images.h"
-#endif
-
 LV_IMG_DECLARE(bongo_cat_none);
 LV_IMG_DECLARE(bongo_cat_left1);
 LV_IMG_DECLARE(bongo_cat_left2);
@@ -60,34 +56,39 @@ ZMK_DONGLE_ANIMATION_PACK_WPM4_DEFINE(bongo_pack, "Bongo Cat", bongo_idle, bongo
                                       bongo_mid, bongo_fast, 5, 30, 70);
 
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_FIGHTER_PACK)
-static const void *const fighter_idle_frames[] = {
-    &fighter_idle_0, &fighter_idle_1, &fighter_idle_2, &fighter_idle_3,
+/* Fighter theme demo: reuse the already linked Bongo Cat descriptors. */
+static const void *const fighter_demo_idle_frames[] = {
+    &bongo_cat_both1_open, &bongo_cat_both1_open, &bongo_cat_both1,
 };
-static const void *const fighter_slow_frames[] = {
-    &fighter_kick_l_0, &fighter_kick_l_1, &fighter_kick_l_2,
-    &fighter_kick_l_1, &fighter_kick_l_0, &fighter_kick_l_1,
+static const void *const fighter_demo_slow_frames[] = {
+    &bongo_cat_left1, &bongo_cat_both1, &bongo_cat_right1, &bongo_cat_both1,
 };
-static const void *const fighter_mid_frames[] = {
-    &fighter_roll_f_0, &fighter_roll_f_1, &fighter_roll_f_2, &fighter_roll_f_3,
-    &fighter_roll_f_4, &fighter_roll_f_3, &fighter_roll_f_2, &fighter_roll_f_1,
+static const void *const fighter_demo_mid_frames[] = {
+    &bongo_cat_both1_open, &bongo_cat_left1, &bongo_cat_both1, &bongo_cat_right1,
+    &bongo_cat_none, &bongo_cat_left2, &bongo_cat_right2, &bongo_cat_both2,
 };
-static const void *const fighter_fast_frames[] = {
-    &fighter_oni_yaki_l_0, &fighter_oni_yaki_l_1, &fighter_oni_yaki_l_2,
-    &fighter_oni_yaki_l_3, &fighter_oni_yaki_l_4, &fighter_oni_yaki_l_5,
-    &fighter_oni_yaki_l_6, &fighter_oni_yaki_l_5,
+static const uint8_t fighter_demo_mid_movement[] = {0, 0, 0, 0, 1, 1, 1, 1};
+static const void *const fighter_demo_fast_frames[] = {
+    &bongo_cat_both1_open, &bongo_cat_both1, &bongo_cat_both1_open, &bongo_cat_both1,
+    &bongo_cat_both1_open, &bongo_cat_both1, &bongo_cat_both1_open, &bongo_cat_none,
+    &bongo_cat_left2, &bongo_cat_right2, &bongo_cat_both2, &bongo_cat_both1,
 };
+static const uint8_t fighter_demo_fast_movement[] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
 
-ZMK_DONGLE_ANIMATION_ACTION_DEFINE(fighter_idle, fighter_idle_frames, 800);
-ZMK_DONGLE_ANIMATION_ACTION_DEFINE(fighter_slow, fighter_slow_frames, 600);
-ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_DEFINE(
-    fighter_mid, fighter_mid_frames, 200, 500, ZMK_DONGLE_ANIMATION_MOTION_LEFT_SCREEN_THIRD,
+ZMK_DONGLE_ANIMATION_ACTION_DEFINE(fighter_demo_idle, fighter_demo_idle_frames, 1500);
+ZMK_DONGLE_ANIMATION_ACTION_DEFINE(fighter_demo_slow, fighter_demo_slow_frames, 600);
+ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_DEFINE(
+    fighter_demo_mid, fighter_demo_mid_frames, fighter_demo_mid_movement, 200, 500,
+    ZMK_DONGLE_ANIMATION_MOTION_LEFT_SCREEN_THIRD,
     ZMK_DONGLE_ANIMATION_FLAG_FULLSCREEN | ZMK_DONGLE_ANIMATION_FLAG_BATTLE_HUD);
-ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_DEFINE(
-    fighter_fast, fighter_fast_frames, 200, 500, ZMK_DONGLE_ANIMATION_MOTION_LEFT_EDGE,
+ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_DEFINE(
+    fighter_demo_fast, fighter_demo_fast_frames, fighter_demo_fast_movement, 200, 500,
+    ZMK_DONGLE_ANIMATION_MOTION_LEFT_EDGE,
     ZMK_DONGLE_ANIMATION_FLAG_FULLSCREEN | ZMK_DONGLE_ANIMATION_FLAG_BATTLE_HUD);
-ZMK_DONGLE_ANIMATION_PACK_WPM4_DEFINE(fighter_pack, "Fighter", fighter_idle, fighter_slow,
-                                      fighter_mid, fighter_fast, 5, 30, 70);
-ZMK_DONGLE_ANIMATION_REGISTRY_DEFINE(50, 26, bongo_pack, fighter_pack);
+ZMK_DONGLE_ANIMATION_PACK_WPM4_DEFINE(fighter_demo_pack, "Fighter Demo", fighter_demo_idle,
+                                      fighter_demo_slow, fighter_demo_mid, fighter_demo_fast,
+                                      5, 30, 70);
+ZMK_DONGLE_ANIMATION_REGISTRY_DEFINE(50, 26, bongo_pack, fighter_demo_pack);
 #else
 ZMK_DONGLE_ANIMATION_REGISTRY_DEFINE(50, 26, bongo_pack);
 #endif
