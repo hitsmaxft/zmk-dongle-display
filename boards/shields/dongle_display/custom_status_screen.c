@@ -9,6 +9,7 @@
 #include "widgets/modifiers.h"
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
 #include "widgets/animation.h"
+#include "widgets/battle_battery.h"
 #else
 #include "widgets/bongo_cat.h"
 #endif
@@ -32,6 +33,7 @@ static struct zmk_widget_layer_status layer_status_widget;
 static struct zmk_widget_modifiers modifiers_widget;
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
 static struct zmk_widget_dongle_animation animation_widget;
+static struct zmk_widget_battle_battery battle_battery_widget;
 #else
 static struct zmk_widget_bongo_cat bongo_cat_widget;
 #endif
@@ -44,6 +46,10 @@ lv_style_t global_style;
 
 lv_obj_t *zmk_display_status_screen() {
     lv_obj_t *screen;
+    lv_obj_t *normal_layer;
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
+    lv_obj_t *battle_hud_layer;
+#endif
     lv_obj_t *status_panel;
 
     lv_style_init(&global_style);
@@ -60,8 +66,22 @@ lv_obj_t *zmk_display_status_screen() {
     
     lv_obj_add_style(screen, &global_style, LV_PART_MAIN);
 
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
+    /* Bottom to top: character animation, battle HUD, normal dongle status. */
+    /* The widget itself is the top-only HUD layer; avoid an extra LVGL wrapper object. */
+    zmk_widget_battle_battery_init(&battle_battery_widget, screen);
+    battle_hud_layer = zmk_widget_battle_battery_obj(&battle_battery_widget);
+    lv_obj_add_flag(battle_hud_layer, LV_OBJ_FLAG_HIDDEN);
+#endif
+
+    normal_layer = lv_obj_create(screen);
+    lv_obj_remove_style_all(normal_layer);
+    lv_obj_set_size(normal_layer, 128, 64);
+    lv_obj_align(normal_layer, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_clear_flag(normal_layer, LV_OBJ_FLAG_SCROLLABLE);
+
     /* Keep every status widget clipped to the left half of the 128x64 panel. */
-    status_panel = lv_obj_create(screen);
+    status_panel = lv_obj_create(normal_layer);
     lv_obj_remove_style_all(status_panel);
     lv_obj_set_size(status_panel, 64, 64);
     lv_obj_align(status_panel, LV_ALIGN_TOP_LEFT, 0, 0);
@@ -72,15 +92,13 @@ lv_obj_t *zmk_display_status_screen() {
                  PADDING_LEFT, 0);
     
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
-    int animation_err = zmk_widget_dongle_animation_init(&animation_widget, screen);
+    int animation_err = zmk_widget_dongle_animation_init(
+        &animation_widget, screen, normal_layer, battle_hud_layer);
     if (animation_err < 0) {
         LOG_ERR("Failed to initialize dongle animation: %d", animation_err);
-    } else {
-        lv_obj_align(zmk_widget_dongle_animation_obj(&animation_widget), LV_ALIGN_TOP_RIGHT, 0,
-                     0);
     }
 #else
-    zmk_widget_bongo_cat_init(&bongo_cat_widget, screen);
+    zmk_widget_bongo_cat_init(&bongo_cat_widget, normal_layer);
     lv_obj_align(zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_TOP_RIGHT, 0, 0);
 #endif
 
@@ -100,7 +118,7 @@ lv_obj_t *zmk_display_status_screen() {
                  PADDING_LEFT, 56);
 
 #if IS_ENABLED(CONFIG_ZMK_BATTERY)
-    zmk_widget_dongle_battery_status_init(&dongle_battery_status_widget, screen);
+    zmk_widget_dongle_battery_status_init(&dongle_battery_status_widget, normal_layer);
     lv_obj_align(zmk_widget_dongle_battery_status_obj(&dongle_battery_status_widget),
                  LV_ALIGN_TOP_RIGHT, -PADDING_RIGHT, 0);
 #endif

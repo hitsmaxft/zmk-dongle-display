@@ -42,6 +42,23 @@ config ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
     bool "Enable the generic multi-animation engine"
     default n
 
+config ZMK_DONGLE_DISPLAY_FIGHTER_PACK
+    bool "Include the built-in Fighter animation pack"
+    default y
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION && !ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+
+config ZMK_DONGLE_DISPLAY_BATTLE_BATTERY_LEFT_SOURCE
+    int "Peripheral battery source shown on the left battle HUD"
+    default 0
+    range 0 31
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
+config ZMK_DONGLE_DISPLAY_BATTLE_BATTERY_RIGHT_SOURCE
+    int "Peripheral battery source shown on the right battle HUD"
+    default 1
+    range 0 31
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
 config ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
     bool "Use an animation provider from ZMK_CONFIG"
     default n
@@ -88,6 +105,15 @@ config ZMK_DONGLE_DISPLAY_ANIMATION_ROTATE_ON_WAKE
     bool "Request the next animation pack after display wake"
     default n
     depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_DEMO_MODE
+    bool "Cycle slow, mid, and fast animations automatically"
+    default n
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+    help
+      Ignore WPM selection and cycle the slow, mid, and fast bands. After all
+      three bands have been shown, advance to the next animation pack. This is
+      intended for temporary display demonstrations without a NEXT binding.
 
 choice ZMK_DISPLAY_WORK_QUEUE
     default ZMK_DISPLAY_WORK_QUEUE_DEDICATED

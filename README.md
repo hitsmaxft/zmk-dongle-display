@@ -63,7 +63,14 @@ CONFIG_ZMK_DONGLE_DISPLAY_MAC_MODIFIERS=y
 
 ### Custom animation provider
 
-The built-in Bongo Cat remains the default. To compile animation data from your ZMK config, add:
+With `CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION=y`, the built-in registry contains Bongo Cat
+and the optional Fighter pack. `animation-next` rotates between them; the legacy `fighter-next`
+binding remains an alias. Fighter idle/slow retains the normal status screen, while mid/fast uses
+frame-synchronous leftward motion and a two-peripheral battle battery HUD. Configure its mapping
+with `CONFIG_ZMK_DONGLE_DISPLAY_BATTLE_BATTERY_LEFT_SOURCE` and
+`CONFIG_ZMK_DONGLE_DISPLAY_BATTLE_BATTERY_RIGHT_SOURCE`.
+
+To compile animation data from your ZMK config instead, add:
 
 ```ini
 CONFIG_ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER=y
@@ -86,6 +93,9 @@ The header path is relative to `ZMK_CONFIG`. Include
 `ZMK_DONGLE_ANIMATION_PACK_WPM4_DEFINE`, and finish with
 `ZMK_DONGLE_ANIMATION_REGISTRY_DEFINE`. Static frame arrays derive their frame count automatically;
 every action must contain 1 to 127 LVGL image descriptors. All packs share the registry canvas size.
+The Provider ABI is version 2. Existing action macros remain source-compatible and default to no
+motion; moving layouts use `ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_DEFINE`. A custom Provider still
+owns the complete registry, so the built-in Fighter pack is not linked into custom builds.
 
 `config/animations/example_provider.h` in the consuming ZMK config is a complete one-frame example.
 No CMake file or module-source change is needed.
