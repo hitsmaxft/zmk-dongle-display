@@ -11,6 +11,8 @@ if(CONFIG_ZMK_DISPLAY AND CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM AND ((NOT CONF
         zephyr_library_sources(widgets/animation.c)
         zephyr_library_sources(widgets/animation_provider.c)
         zephyr_library_sources(widgets/battle_battery.c)
+        zephyr_library_sources_ifdef(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_CHARGE_MODE
+            widgets/fighter_charge.c)
         if(CONFIG_ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER)
             if("${CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_HEADER}" STREQUAL "")
                 message(FATAL_ERROR "Custom dongle animation provider is enabled, but no header is configured")

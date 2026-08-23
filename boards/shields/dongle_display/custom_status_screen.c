@@ -10,6 +10,9 @@
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
 #include "widgets/animation.h"
 #include "widgets/battle_battery.h"
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_CHARGE_MODE)
+#include "widgets/fighter_charge.h"
+#endif
 #else
 #include "widgets/bongo_cat.h"
 #endif
@@ -34,6 +37,9 @@ static struct zmk_widget_modifiers modifiers_widget;
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
 static struct zmk_widget_dongle_animation animation_widget;
 static struct zmk_widget_battle_battery battle_battery_widget;
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_CHARGE_MODE)
+static struct zmk_widget_fighter_charge fighter_charge_widget;
+#endif
 #else
 static struct zmk_widget_bongo_cat bongo_cat_widget;
 #endif
@@ -97,6 +103,12 @@ lv_obj_t *zmk_display_status_screen() {
     if (animation_err < 0) {
         LOG_ERR("Failed to initialize dongle animation: %d", animation_err);
     }
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_CHARGE_MODE)
+    int charge_err = zmk_widget_fighter_charge_init(&fighter_charge_widget, screen);
+    if (charge_err < 0) {
+        LOG_ERR("Failed to initialize fighter charge HUD: %d", charge_err);
+    }
+#endif
 #else
     zmk_widget_bongo_cat_init(&bongo_cat_widget, normal_layer);
     lv_obj_align(zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_TOP_RIGHT, 0, 0);

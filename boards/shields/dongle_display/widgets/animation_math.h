@@ -6,12 +6,87 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#define ZMK_DONGLE_ANIMATION_CHARGE_MAX 100U
+#define ZMK_DONGLE_ANIMATION_IDLE_BAND 0U
+#define ZMK_DONGLE_ANIMATION_SLOW_BAND 1U
+#define ZMK_DONGLE_ANIMATION_MID_BAND 2U
+#define ZMK_DONGLE_ANIMATION_FAST_BAND 3U
+#define ZMK_DONGLE_ANIMATION_CHARGE_DEMO_PHASE_COUNT 7U
+
+static inline bool zmk_dongle_animation_waits_for_paint(bool explicit_timing,
+                                                         uint16_t endpoint_hold_ms,
+                                                         uint8_t frame_count,
+                                                         uint8_t frame_index) {
+    return (explicit_timing && frame_index == 0) ||
+           (endpoint_hold_ms > 0 &&
+            (frame_index == 0 || frame_index == frame_count - 1));
+}
+
+static inline size_t zmk_dongle_animation_charge_demo_band(uint8_t phase) {
+    if (phase == 0) {
+        return ZMK_DONGLE_ANIMATION_IDLE_BAND;
+    }
+    if (phase <= 2) {
+        return ZMK_DONGLE_ANIMATION_SLOW_BAND;
+    }
+    if (phase <= 4) {
+        return ZMK_DONGLE_ANIMATION_MID_BAND;
+    }
+    if (phase == 5) {
+        return ZMK_DONGLE_ANIMATION_IDLE_BAND;
+    }
+    return ZMK_DONGLE_ANIMATION_FAST_BAND;
+}
+
+static inline uint8_t zmk_dongle_animation_charge_gain(size_t completed_band,
+                                                        bool demo_mode) {
+    if (demo_mode) {
+        return completed_band == ZMK_DONGLE_ANIMATION_MID_BAND ? 50 : 0;
+    }
+    if (completed_band == ZMK_DONGLE_ANIMATION_SLOW_BAND) {
+        return 5;
+    }
+    if (completed_band == ZMK_DONGLE_ANIMATION_MID_BAND) {
+        return 10;
+    }
+    return 0;
+}
+
+static inline uint8_t zmk_dongle_animation_charge_add(uint8_t charge, uint8_t gain) {
+    uint16_t total = (uint16_t)charge + gain;
+    return total >= ZMK_DONGLE_ANIMATION_CHARGE_MAX
+               ? ZMK_DONGLE_ANIMATION_CHARGE_MAX
+               : (uint8_t)total;
+}
+
+static inline bool zmk_dongle_animation_charge_ready(uint8_t charge) {
+    return charge >= ZMK_DONGLE_ANIMATION_CHARGE_MAX;
+}
+
+static inline size_t zmk_dongle_animation_charge_wpm_band(size_t requested_band) {
+    return requested_band > ZMK_DONGLE_ANIMATION_MID_BAND
+               ? ZMK_DONGLE_ANIMATION_MID_BAND
+               : requested_band;
+}
 
 static inline size_t zmk_dongle_animation_start_index(uint32_t random_value,
                                                        size_t pack_count) {
     return pack_count > 0 ? random_value % pack_count : 0;
+}
+
+static inline uint32_t zmk_dongle_animation_mix_start_seed(uint32_t cycle,
+                                                            uint32_t boot_nonce) {
+    uint32_t value = cycle + boot_nonce;
+    value ^= value >> 16;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16;
+    return value;
 }
 
 static inline size_t zmk_dongle_animation_next_index(size_t current_index, size_t pack_count) {

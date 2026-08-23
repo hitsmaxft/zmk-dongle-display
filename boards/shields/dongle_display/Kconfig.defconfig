@@ -109,6 +109,23 @@ config ZMK_DONGLE_DISPLAY_ANIMATION_ROTATE_ON_WAKE
     default n
     depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
 
+choice ZMK_DONGLE_DISPLAY_ANIMATION_PLAYBACK_MODE
+    prompt "Fighter animation playback mode"
+    default ZMK_DONGLE_DISPLAY_ANIMATION_WPM_MODE
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_WPM_MODE
+    bool "Select animation bands directly from WPM"
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_CHARGE_MODE
+    bool "Charge slow and mid actions before fast"
+    help
+      Keep WPM selection at or below mid. Completed slow loops add 5 charge
+      and completed mid actions add 10. At 100 charge, the completion state
+      machine starts one fast action and resets charge to zero.
+
+endchoice
+
 config ZMK_DONGLE_DISPLAY_ANIMATION_DEMO_MODE
     bool "Cycle slow, mid, and fast animations automatically"
     default n
@@ -117,6 +134,10 @@ config ZMK_DONGLE_DISPLAY_ANIMATION_DEMO_MODE
       Ignore WPM selection and cycle the slow, mid, and fast bands. After all
       three bands have been shown, advance to the next animation pack. This is
       intended for temporary display demonstrations without a NEXT binding.
+      When charge mode is also enabled, demonstrate idle, slow, slow, mid, mid,
+      a full-charge idle, and fast. Each complete mid adds 50 charge; the full
+      gauge remains visible through one idle action while the battle HUD stays
+      active before fast starts. The next pack then begins from idle.
 
 choice ZMK_DISPLAY_WORK_QUEUE
     default ZMK_DISPLAY_WORK_QUEUE_DEDICATED

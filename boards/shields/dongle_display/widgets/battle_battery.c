@@ -188,7 +188,8 @@ int zmk_widget_battle_battery_init(struct zmk_widget_battle_battery *widget, lv_
     lv_obj_set_style_pad_bottom(widget->obj, 1, LV_PART_MAIN);
     lv_obj_set_style_pad_left(widget->obj, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_right(widget->obj, 0, LV_PART_MAIN);
-    lv_obj_align(widget->obj, LV_ALIGN_TOP_LEFT, 1, 1);
+    /* Keep the health-bar top rail flush with the first screen row. */
+    lv_obj_align(widget->obj, LV_ALIGN_TOP_LEFT, 1, 0);
     lv_obj_clear_flag(widget->obj, LV_OBJ_FLAG_SCROLLABLE);
     init_side(&widget->sides[0], widget->obj, false);
     init_side(&widget->sides[1], widget->obj, true);
