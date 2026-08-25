@@ -43,21 +43,19 @@ struct battery_object {
 
 static lv_color_t battery_image_buffer[ZMK_SPLIT_BLE_PERIPHERAL_COUNT + SOURCE_OFFSET][BUFFER_SIZE];
 
+static void draw_battery_rect(lv_obj_t *canvas, const lv_area_t *coords, bool outline) {
+    for (int32_t y = coords->y1; y <= coords->y2; y++) {
+        for (int32_t x = coords->x1; x <= coords->x2; x++) {
+            if (!outline || x == coords->x1 || x == coords->x2 || y == coords->y1 ||
+                y == coords->y2) {
+                lv_canvas_set_px(canvas, x, y, lv_color_white(), LV_OPA_COVER);
+            }
+        }
+    }
+}
+
 static void draw_battery(lv_obj_t *canvas, uint8_t level, bool usb_present) {
     lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER);
-
-    lv_layer_t layer;
-    lv_canvas_init_layer(canvas, &layer);
-
-    lv_draw_rect_dsc_t rect_fill_dsc;
-    lv_draw_rect_dsc_init(&rect_fill_dsc);
-    rect_fill_dsc.bg_color = lv_color_white();
-
-    if (usb_present) {
-        rect_fill_dsc.bg_opa = LV_OPA_TRANSP;
-        rect_fill_dsc.border_color = lv_color_white();
-        rect_fill_dsc.border_width = 1;
-    }
 
     lv_canvas_set_px(canvas, 0, 0, lv_color_white(), LV_OPA_COVER);
     lv_canvas_set_px(canvas, 4, 0, lv_color_white(), LV_OPA_COVER);
@@ -80,10 +78,8 @@ static void draw_battery(lv_obj_t *canvas, uint8_t level, bool usb_present) {
     }
 
     if (rect_draw) {
-        lv_draw_rect(&layer, &rect_fill_dsc, &rect_coords);
+        draw_battery_rect(canvas, &rect_coords, usb_present);
     }
-
-    lv_canvas_finish_layer(canvas, &layer);
 }
 
 static void set_battery_symbol(lv_obj_t *widget, struct battery_state state) {
@@ -121,6 +117,7 @@ static struct battery_state peripheral_battery_status_get_state(const zmk_event_
     };
 }
 
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_DONGLE_BATTERY)
 static struct battery_state central_battery_status_get_state(const zmk_event_t *eh) {
     const struct zmk_battery_state_changed *ev = as_zmk_battery_state_changed(eh);
     return (struct battery_state) {
@@ -131,13 +128,18 @@ static struct battery_state central_battery_status_get_state(const zmk_event_t *
 #endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK) */
     };
 }
+#endif
 
 static struct battery_state battery_status_get_state(const zmk_event_t *eh) { 
     if (as_zmk_peripheral_battery_state_changed(eh) != NULL) {
         return peripheral_battery_status_get_state(eh);
-    } else {
-        return central_battery_status_get_state(eh);
     }
+
+#if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_DONGLE_BATTERY)
+    return central_battery_status_get_state(eh);
+#else
+    return (struct battery_state){.source = UINT8_MAX};
+#endif
 }
 
 ZMK_DISPLAY_WIDGET_LISTENER(widget_dongle_battery_status, struct battery_state,

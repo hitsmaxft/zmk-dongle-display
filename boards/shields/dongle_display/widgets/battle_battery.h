@@ -5,9 +5,6 @@
 #include <zephyr/kernel.h>
 
 struct zmk_widget_battle_battery_side {
-    lv_obj_t *number;
-    lv_obj_t *bar;
-    lv_obj_t *fill;
     uint8_t level;
 };
 

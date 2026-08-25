@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 The ZMK Contributors SPDX-License-Identifier: MIT */
 
 #include <zephyr/kernel.h>
+#include <string.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -28,76 +29,43 @@ static const uint8_t digit_rows[10][5] = {
     {0x7, 0x5, 0x7, 0x1, 0x7}, /* 9 */
 };
 
-/* A fixed 2x2 I1 checkerboard makes a 50% gray bar on the monochrome OLED. */
-static const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST uint8_t gray_pixels_map[] = {
-    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0xff,
-    0x80, 0x40,
-};
-static const lv_image_dsc_t gray_pixels = {
-    .header.cf = LV_COLOR_FORMAT_I1,
-    .header.w = 2,
-    .header.h = 2,
-    .data_size = sizeof(gray_pixels_map),
-    .data = gray_pixels_map,
-};
-
-/* Solid white top/bottom rails keep the slot visible; its sides remain open. */
-static const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST uint8_t slot_rails_map[] = {
-    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0xff,
-    0xc0, 0x00, 0x00, 0x00, 0xc0,
-};
-static const lv_image_dsc_t slot_rails = {
-    .header.cf = LV_COLOR_FORMAT_I1,
-    .header.w = 2,
-    .header.h = BAR_HEIGHT,
-    .data_size = sizeof(slot_rails_map),
-    .data = slot_rails_map,
-};
+LV_DRAW_BUF_DEFINE_STATIC(battle_battery_buf, 126, 13, LV_COLOR_FORMAT_I1);
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 struct battle_battery_state { uint8_t source; uint8_t level; };
 
-static void draw_number_part(lv_layer_t *layer, const lv_area_t *area) {
-    lv_draw_rect_dsc_t dsc;
-    lv_draw_rect_dsc_init(&dsc);
-    /* The OLED uses inversion-on: logical black is the visible white ink. */
-    dsc.bg_color = lv_color_black();
-    dsc.bg_opa = LV_OPA_COVER;
-    lv_draw_rect(layer, &dsc, area);
+static void clear_bitmap(lv_draw_buf_t *draw_buf) {
+    uint8_t *pixels = lv_draw_buf_goto_xy(draw_buf, 0, 0);
+    memset(pixels, 0xff, draw_buf->header.stride * draw_buf->header.h);
 }
 
-static void draw_number_cb(lv_event_t *event) {
-    struct zmk_widget_battle_battery_side *side = lv_event_get_user_data(event);
-    lv_layer_t *layer = lv_event_get_layer(event);
-    lv_area_t coords;
-    lv_obj_get_coords(side->number, &coords);
+static void set_black_px(lv_draw_buf_t *draw_buf, int32_t x, int32_t y) {
+    uint8_t *byte = lv_draw_buf_goto_xy(draw_buf, x, y);
+    *byte &= ~BIT(7 - (x & 0x7));
+}
 
-    lv_area_t underline = {
-        .x1 = coords.x1,
-        .y1 = coords.y2,
-        .x2 = coords.x2,
-        .y2 = coords.y2,
-    };
-    draw_number_part(layer, &underline);
-
+static void draw_number(lv_draw_buf_t *draw_buf, uint8_t level, int32_t origin) {
+    for (int32_t x = origin; x < origin + NUMBER_WIDTH; x++) {
+        set_black_px(draw_buf, x, NUMBER_HEIGHT + 5);
+    }
     uint8_t digits[3];
     uint8_t count;
-    if (side->level >= 100) {
+    if (level >= 100) {
         digits[0] = 1;
         digits[1] = 0;
         digits[2] = 0;
         count = 3;
-    } else if (side->level >= 10) {
-        digits[0] = side->level / 10;
-        digits[1] = side->level % 10;
+    } else if (level >= 10) {
+        digits[0] = level / 10;
+        digits[1] = level % 10;
         count = 2;
     } else {
-        digits[0] = side->level;
+        digits[0] = level;
         count = 1;
     }
 
     int32_t width = count * 3 + count - 1;
-    int32_t origin_x = coords.x1 + (NUMBER_WIDTH - width) / 2;
+    int32_t origin_x = origin + (NUMBER_WIDTH - width) / 2;
     for (uint8_t digit = 0; digit < count; digit++) {
         for (uint8_t y = 0; y < 5; y++) {
             uint8_t row = digit_rows[digits[digit]][y];
@@ -105,25 +73,36 @@ static void draw_number_cb(lv_event_t *event) {
                 if ((row & BIT(2 - x)) == 0) {
                     continue;
                 }
-                lv_area_t pixel = {
-                    .x1 = origin_x + digit * 4 + x,
-                    .y1 = coords.y1 + y,
-                    .x2 = origin_x + digit * 4 + x,
-                    .y2 = coords.y1 + y,
-                };
-                draw_number_part(layer, &pixel);
+                set_black_px(draw_buf, origin_x + digit * 4 + x, 6 + y);
             }
         }
     }
 }
 
-static void set_side(struct zmk_widget_battle_battery_side *side, uint8_t level, bool right) {
-    level = MIN(level, 100);
-    side->level = level;
-    lv_obj_invalidate(side->number);
-    lv_obj_set_size(side->fill, ((uint32_t)level * BAR_WIDTH) / 100U, BAR_FILL_HEIGHT);
-    /* Preserve health toward the screen centre, as in the original battle HUD. */
-    lv_obj_align(side->fill, right ? LV_ALIGN_LEFT_MID : LV_ALIGN_RIGHT_MID, 0, 0);
+static void redraw(struct zmk_widget_battle_battery *widget) {
+    lv_obj_t *canvas = widget->obj;
+    lv_draw_buf_t *draw_buf = lv_canvas_get_draw_buf(canvas);
+    clear_bitmap(draw_buf);
+
+    for (uint8_t side = 0; side < 2; side++) {
+        int32_t bar_x = side == 0 ? 0 : 68;
+        for (int32_t x = bar_x; x < bar_x + BAR_WIDTH; x++) {
+            set_black_px(draw_buf, x, 0);
+            set_black_px(draw_buf, x, BAR_HEIGHT - 1);
+        }
+
+        int32_t fill_width = ((uint32_t)widget->sides[side].level * BAR_WIDTH) / 100U;
+        int32_t fill_x = side == 0 ? bar_x + BAR_WIDTH - fill_width : bar_x;
+        for (int32_t y = 1; y <= BAR_FILL_HEIGHT; y++) {
+            for (int32_t x = fill_x; x < fill_x + fill_width; x++) {
+                if (((x + y) & 1) == 0) {
+                    set_black_px(draw_buf, x, y);
+                }
+            }
+        }
+        draw_number(draw_buf, widget->sides[side].level, side == 0 ? 0 : 115);
+    }
+    lv_obj_invalidate(canvas);
 }
 
 static void update_cb(struct battle_battery_state state) {
@@ -133,7 +112,12 @@ static void update_cb(struct battle_battery_state state) {
     if (side_index < 0) { return; }
     struct zmk_widget_battle_battery *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
-        set_side(&widget->sides[side_index], state.level, side_index == 1);
+        uint8_t level = MIN(state.level, 100);
+        if (widget->sides[side_index].level == level) {
+            continue;
+        }
+        widget->sides[side_index].level = level;
+        redraw(widget);
     }
 }
 
@@ -147,52 +131,17 @@ ZMK_DISPLAY_WIDGET_LISTENER(widget_battle_battery, struct battle_battery_state, 
                             get_state)
 ZMK_SUBSCRIPTION(widget_battle_battery, zmk_peripheral_battery_state_changed);
 
-static void init_side(struct zmk_widget_battle_battery_side *side, lv_obj_t *parent, bool right) {
-    side->level = 0;
-    side->number = lv_obj_create(parent);
-    lv_obj_remove_style_all(side->number);
-    lv_obj_set_size(side->number, NUMBER_WIDTH, NUMBER_HEIGHT);
-    lv_obj_align(side->number, LV_ALIGN_TOP_LEFT, right ? 115 : 0, 6);
-    lv_obj_clear_flag(side->number, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_event_cb(side->number, draw_number_cb, LV_EVENT_DRAW_MAIN, side);
-    side->bar = lv_obj_create(parent);
-    lv_obj_remove_style_all(side->bar);
-    lv_obj_set_style_bg_color(side->bar, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(side->bar, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_image_src(side->bar, &slot_rails, LV_PART_MAIN);
-    lv_obj_set_style_bg_image_opa(side->bar, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_image_tiled(side->bar, true, LV_PART_MAIN);
-    lv_obj_set_size(side->bar, BAR_WIDTH, BAR_HEIGHT);
-    lv_obj_align(side->bar, LV_ALIGN_TOP_LEFT, right ? 68 : 0, 0);
-    lv_obj_clear_flag(side->bar, LV_OBJ_FLAG_SCROLLABLE);
-    side->fill = lv_obj_create(side->bar);
-    lv_obj_remove_style_all(side->fill);
-    lv_obj_set_style_bg_color(side->fill, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(side->fill, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_image_src(side->fill, &gray_pixels, LV_PART_MAIN);
-    lv_obj_set_style_bg_image_opa(side->fill, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_image_tiled(side->fill, true, LV_PART_MAIN);
-    lv_obj_set_size(side->fill, 0, BAR_FILL_HEIGHT);
-    lv_obj_align(side->fill, right ? LV_ALIGN_LEFT_MID : LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_clear_flag(side->fill, LV_OBJ_FLAG_SCROLLABLE);
-}
-
 int zmk_widget_battle_battery_init(struct zmk_widget_battle_battery *widget, lv_obj_t *parent) {
-    widget->obj = lv_obj_create(parent);
-    lv_obj_remove_style_all(widget->obj);
-    lv_obj_set_size(widget->obj, 126, 13);
-    lv_obj_set_style_bg_opa(widget->obj, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(widget->obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_margin_all(widget->obj, 1, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(widget->obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(widget->obj, 1, LV_PART_MAIN);
-    lv_obj_set_style_pad_left(widget->obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_right(widget->obj, 0, LV_PART_MAIN);
+    widget->sides[0].level = 0;
+    widget->sides[1].level = 0;
+    widget->obj = lv_canvas_create(parent);
+    LV_DRAW_BUF_INIT_STATIC(battle_battery_buf);
+    lv_canvas_set_draw_buf(widget->obj, &battle_battery_buf);
+    lv_canvas_set_palette(widget->obj, 0, lv_color_to_32(lv_color_black(), LV_OPA_COVER));
+    lv_canvas_set_palette(widget->obj, 1, lv_color_to_32(lv_color_white(), LV_OPA_COVER));
     /* Keep the health-bar top rail flush with the first screen row. */
     lv_obj_align(widget->obj, LV_ALIGN_TOP_LEFT, 1, 0);
-    lv_obj_clear_flag(widget->obj, LV_OBJ_FLAG_SCROLLABLE);
-    init_side(&widget->sides[0], widget->obj, false);
-    init_side(&widget->sides[1], widget->obj, true);
+    redraw(widget);
     sys_slist_append(&widgets, &widget->node);
     widget_battle_battery_init();
     return 0;
