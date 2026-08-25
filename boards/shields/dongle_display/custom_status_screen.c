@@ -111,7 +111,8 @@ lv_obj_t *zmk_display_status_screen() {
 #endif
 #else
     zmk_widget_bongo_cat_init(&bongo_cat_widget, normal_layer);
-    lv_obj_align(zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_TOP_RIGHT, 0, 0);
+    lv_obj_align(zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_BOTTOM_RIGHT,
+                 -PADDING_RIGHT, -7);
 #endif
 
     zmk_widget_modifiers_init(&modifiers_widget, status_panel);

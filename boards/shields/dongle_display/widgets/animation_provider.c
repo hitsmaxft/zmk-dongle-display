@@ -48,10 +48,24 @@ static const void *const bongo_fast_frames[] = {
     &bongo_cat_none,
 };
 
-ZMK_DONGLE_ANIMATION_ACTION_DEFINE(bongo_idle, bongo_idle_frames, 10000);
-ZMK_DONGLE_ANIMATION_ACTION_DEFINE(bongo_slow, bongo_slow_frames, 2000);
-ZMK_DONGLE_ANIMATION_ACTION_DEFINE(bongo_mid, bongo_mid_frames, 500);
-ZMK_DONGLE_ANIMATION_ACTION_DEFINE(bongo_fast, bongo_fast_frames, 200);
+/* Match the original 128x64 widget's bottom-right alignment: 64 - 26 - 7 = 31. */
+static const int8_t bongo_idle_y_offsets[] = {31, 31, 31, 31};
+static const int8_t bongo_slow_y_offsets[] = {31, 31, 31, 31, 31, 31, 31, 31, 31};
+static const int8_t bongo_mid_y_offsets[] = {31, 31, 31, 31, 31, 31};
+static const int8_t bongo_fast_y_offsets[] = {31, 31, 31, 31};
+
+ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_Y_OFFSETS_DEFINE(
+    bongo_idle, bongo_idle_frames, NULL, NULL, bongo_idle_y_offsets, NULL,
+    ZMK_DONGLE_ANIMATION_NO_RETURN_STEP, 10000, 0, ZMK_DONGLE_ANIMATION_MOTION_NONE, 0);
+ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_Y_OFFSETS_DEFINE(
+    bongo_slow, bongo_slow_frames, NULL, NULL, bongo_slow_y_offsets, NULL,
+    ZMK_DONGLE_ANIMATION_NO_RETURN_STEP, 2000, 0, ZMK_DONGLE_ANIMATION_MOTION_NONE, 0);
+ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_Y_OFFSETS_DEFINE(
+    bongo_mid, bongo_mid_frames, NULL, NULL, bongo_mid_y_offsets, NULL,
+    ZMK_DONGLE_ANIMATION_NO_RETURN_STEP, 500, 0, ZMK_DONGLE_ANIMATION_MOTION_NONE, 0);
+ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_Y_OFFSETS_DEFINE(
+    bongo_fast, bongo_fast_frames, NULL, NULL, bongo_fast_y_offsets, NULL,
+    ZMK_DONGLE_ANIMATION_NO_RETURN_STEP, 200, 0, ZMK_DONGLE_ANIMATION_MOTION_NONE, 0);
 ZMK_DONGLE_ANIMATION_PACK_WPM4_DEFINE(bongo_pack, "Bongo Cat", bongo_idle, bongo_slow,
                                       bongo_mid, bongo_fast, 5, 30, 70);
 
