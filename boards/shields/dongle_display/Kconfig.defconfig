@@ -9,7 +9,7 @@ endchoice
 
 config ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
     select LV_USE_LABEL
-    select LV_USE_IMG
+    select LV_USE_IMAGE
     select LV_USE_CANVAS
     select LV_USE_ANIMIMG 
     select LV_USE_ANIMATION
@@ -37,6 +37,107 @@ config ZMK_DONGLE_DISPLAY_PADDING_RIGHT
     int "Right padding for widgets in pixels"
     default 0
     range 0 20
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+    bool "Enable the generic multi-animation engine"
+    default n
+
+config ZMK_DONGLE_DISPLAY_FIGHTER_PACK
+    bool "Include the built-in Fighter theme demo pack"
+    default y
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION && !ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+    help
+      Demonstrate Fighter layering, battle HUD, and selective per-step movement
+      while reusing the existing Bongo Cat image descriptors and bitmap data.
+
+config ZMK_DONGLE_DISPLAY_BATTLE_BATTERY_LEFT_SOURCE
+    int "Peripheral battery source shown on the left battle HUD"
+    default 0
+    range 0 31
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
+config ZMK_DONGLE_DISPLAY_BATTLE_BATTERY_RIGHT_SOURCE
+    int "Peripheral battery source shown on the right battle HUD"
+    default 1
+    range 0 31
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
+config ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+    bool "Use an animation provider from ZMK_CONFIG"
+    default n
+    select ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_HEADER
+    string "Animation provider header relative to ZMK_CONFIG"
+    default ""
+    depends on ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
+    bool "Generate the animation provider during the build"
+    default n
+    depends on ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATOR
+    string "Provider generator relative to ZMK_CONFIG"
+    default ""
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATOR_ARGS
+    string "Provider generator arguments"
+    default ""
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_CACHE_DIR
+    string "Generated provider cache directory relative to ZMK_CONFIG"
+    default "../.build/_graphs"
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_ROM_MAX_BYTES
+    int "Optional maximum total linked ROM bytes with custom animations"
+    default 0
+    range 0 2147483647
+    depends on ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER
+    help
+      When nonzero, fail the final link if complete firmware ROM usage exceeds
+      this empirical startup-safety budget. This limits the linked image as a
+      whole, not merely the generated animation bitmap payload. Set this to
+      zero to disable the guard for unrestricted capacity or optimization
+      testing.
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_ROTATE_ON_WAKE
+    bool "Request the next animation pack after display wake"
+    default n
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
+choice ZMK_DONGLE_DISPLAY_ANIMATION_PLAYBACK_MODE
+    prompt "Fighter animation playback mode"
+    default ZMK_DONGLE_DISPLAY_ANIMATION_WPM_MODE
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_WPM_MODE
+    bool "Select animation bands directly from WPM"
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_CHARGE_MODE
+    bool "Charge slow and mid actions before fast"
+    help
+      Keep WPM selection at or below mid. Completed slow loops add 5 charge
+      and completed mid actions add 10. At 100 charge, the completion state
+      machine starts one fast action and resets charge to zero.
+
+endchoice
+
+config ZMK_DONGLE_DISPLAY_ANIMATION_DEMO_MODE
+    bool "Cycle slow, mid, and fast animations automatically"
+    default n
+    depends on ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION
+    help
+      Ignore WPM selection and cycle the slow, mid, and fast bands. After all
+      three bands have been shown, advance to the next animation pack. This is
+      intended for temporary display demonstrations without a NEXT binding.
+      When charge mode is also enabled, demonstrate idle, slow, slow, mid, mid,
+      a full-charge idle, and fast. Each complete mid adds 50 charge; the full
+      gauge remains visible through one idle action while the battle HUD stays
+      active before fast starts. The next pack then begins from idle.
 
 choice ZMK_DISPLAY_WORK_QUEUE
     default ZMK_DISPLAY_WORK_QUEUE_DEDICATED

@@ -61,6 +61,62 @@ If you want to use MacOS modifier symbols instead of the Windows modifier symbol
 CONFIG_ZMK_DONGLE_DISPLAY_MAC_MODIFIERS=y
 ```
 
+### Custom animation provider
+
+With `CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION=y`, the built-in registry contains Bongo Cat
+and the optional Fighter pack. `animation-next` rotates between them; the legacy `fighter-next`
+binding remains an alias. Fighter idle/slow retains the normal status screen, while mid/fast uses
+frame-synchronous leftward motion and a two-peripheral battle battery HUD. Configure its mapping
+with `CONFIG_ZMK_DONGLE_DISPLAY_BATTLE_BATTERY_LEFT_SOURCE` and
+`CONFIG_ZMK_DONGLE_DISPLAY_BATTLE_BATTERY_RIGHT_SOURCE`.
+
+To compile animation data from your ZMK config instead, add:
+
+```ini
+CONFIG_ZMK_DONGLE_DISPLAY_CUSTOM_ANIMATION_PROVIDER=y
+CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_HEADER="animations/my_provider.h"
+CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_ROTATE_ON_WAKE=y
+```
+
+For a build-generated Provider, also configure
+`CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_PROVIDER_GENERATED`, the generator path, a persistent cache
+directory, and use the cached filename as `ANIMATION_PROVIDER_HEADER`. CMake invokes the generator
+before compiling the Provider; input hashing and cache invalidation belong to that generator.
+
+The custom-provider option selects `CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION` automatically.
+When neither option is enabled, CMake compiles the original Bongo Cat widget directly; the generic
+engine, provider registry, validation, random selection, and NEXT behavior have no linked symbols.
+
+The header path is relative to `ZMK_CONFIG`. Include
+`<zmk/dongle_display/animation.h>`, define actions with
+`ZMK_DONGLE_ANIMATION_ACTION_DEFINE`, define packs with
+`ZMK_DONGLE_ANIMATION_PACK_WPM4_DEFINE`, and finish with
+`ZMK_DONGLE_ANIMATION_REGISTRY_DEFINE`. Static frame arrays derive their frame count automatically;
+every action must contain 1 to 127 LVGL image descriptors. All packs share the registry canvas size.
+The Provider ABI is version 5. Existing action macros remain source-compatible and default to no
+motion; moving layouts use `ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_DEFINE`. A moving action may use
+`ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_DEFINE` with a same-length `uint8_t` table:
+zero keeps the previous X position and one advances an equal movement interval. A null table keeps
+the previous behavior in which every frame after the first advances. A custom Provider still owns
+the complete registry, so built-in packs are not linked into custom builds.
+For a single forward-then-return action,
+`ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_RETURN_DEFINE` adds one return-step boundary.
+Moving steps before it divide travel to the target; moving steps from it onward divide travel back
+to the origin. Per-step data remains only zero/fixed or one/move, with no coordinate script.
+
+Without a custom Provider, `CONFIG_ZMK_DONGLE_DISPLAY_FIGHTER_PACK` adds the built-in `Fighter
+Demo` pack. It reuses the linked Bongo Cat image descriptors while exercising fullscreen Fighter
+layers, the battle HUD, and selective per-frame movement; `fighter_images.c` is not compiled for
+this demo.
+
+`config/animations/example_provider.h` in the consuming ZMK config is a complete one-frame example.
+No CMake file or module-source change is needed.
+
+To request the next pack from a keymap, define the zero-parameter
+`zmk,behavior-dongle-animation-next` behavior and bind it as `&animation_next`. The current action
+finishes before the request is applied. Startup selects a random pack; NEXT then advances in stable
+Provider order.
+
 ## Demo
 ![output](https://github.com/englmaxi/zmk-config/assets/43675074/8d268f23-1a4f-44c3-817e-c36dc96a1f8b)
 ![mods](https://github.com/englmaxi/zmk-config/assets/43675074/af9ec3f5-8f61-4629-abed-14ba0047f0bd)
