@@ -111,6 +111,11 @@ lv_obj_t *zmk_display_status_screen() {
 #endif
     if (animation_err >= 0) {
         lv_obj_move_foreground(zmk_widget_dongle_animation_obj(&animation_widget));
+        lv_obj_t *projectile =
+            zmk_widget_dongle_animation_projectile_obj(&animation_widget);
+        if (projectile != NULL) {
+            lv_obj_move_foreground(projectile);
+        }
     }
 #else
     zmk_widget_bongo_cat_init(&bongo_cat_widget, normal_layer);
@@ -138,6 +143,12 @@ lv_obj_t *zmk_display_status_screen() {
     lv_obj_align(zmk_widget_dongle_battery_status_obj(&dongle_battery_status_widget),
                  LV_ALIGN_TOP_RIGHT, -PADDING_RIGHT, 0);
 #endif
+
+    lv_mem_monitor_t heap;
+    lv_mem_monitor(&heap);
+    LOG_INF("LVGL heap: total=%u free=%u max_used=%u used=%u%% frag=%u%%",
+            (unsigned int)heap.total_size, (unsigned int)heap.free_size,
+            (unsigned int)heap.max_used, heap.used_pct, heap.frag_pct);
 
     return screen;
 }

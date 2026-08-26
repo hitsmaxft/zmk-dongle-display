@@ -12,9 +12,12 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/util_macro.h>
 
-#define ZMK_DONGLE_ANIMATION_PROVIDER_ABI_VERSION 8
+#define ZMK_DONGLE_ANIMATION_PROVIDER_ABI_VERSION 9
 #define ZMK_DONGLE_ANIMATION_MAX_FRAMES 127
 #define ZMK_DONGLE_ANIMATION_NO_RETURN_STEP UINT8_MAX
+
+#define ZMK_DONGLE_ANIMATION_FRAME_ROLE_CHARACTER 0U
+#define ZMK_DONGLE_ANIMATION_FRAME_ROLE_PROJECTILE 1U
 
 enum zmk_dongle_animation_motion {
     ZMK_DONGLE_ANIMATION_MOTION_NONE = 0,
@@ -30,6 +33,7 @@ enum zmk_dongle_animation_motion {
 struct zmk_dongle_animation_action {
     const char *name;
     const void *const *frames;
+    const uint8_t *frame_roles;
     const uint8_t *movement_steps;
     const int8_t *frame_x_offsets;
     const int8_t *frame_y_offsets;
@@ -41,6 +45,41 @@ struct zmk_dongle_animation_action {
     uint8_t return_step;
     uint16_t endpoint_hold_ms;
 };
+
+#define ZMK_DONGLE_ANIMATION_ACTION_TRACKS_DEFINE(                                          \
+    _id, _frames, _frame_roles, _movement_steps, _frame_x_offsets, _frame_y_offsets,        \
+    _frame_durations_ms, _return_step, _duration_ms, _endpoint_hold_ms, _motion, _flags)    \
+    _Static_assert(ARRAY_SIZE(_frames) > 0, #_id " must contain at least one frame");      \
+    _Static_assert(ARRAY_SIZE(_frames) <= ZMK_DONGLE_ANIMATION_MAX_FRAMES,                   \
+                   #_id " exceeds LVGL pic_count");                                       \
+    _Static_assert(ARRAY_SIZE(_frame_roles) == ARRAY_SIZE(_frames),                          \
+                   #_id " frame role table must match its frame count");                  \
+    _Static_assert((_duration_ms) >= ARRAY_SIZE(_frames),                                    \
+                   #_id " duration is shorter than its frame count");                     \
+    _Static_assert((_endpoint_hold_ms) <= UINT16_MAX,                                       \
+                   #_id " endpoint hold exceeds the provider ABI");                      \
+    _Static_assert((_endpoint_hold_ms) == 0 || ARRAY_SIZE(_frames) >= 2,                     \
+                   #_id " endpoint hold requires at least two frames");                   \
+    _Static_assert((_motion) >= ZMK_DONGLE_ANIMATION_MOTION_NONE &&                          \
+                       (_motion) <= ZMK_DONGLE_ANIMATION_MOTION_LEFT_EDGE,                   \
+                   #_id " has an unknown motion");                                         \
+    _Static_assert(((_flags) & ~ZMK_DONGLE_ANIMATION_FLAGS_MASK) == 0,                       \
+                   #_id " has unknown flags");                                              \
+    static const struct zmk_dongle_animation_action _id = {                                 \
+        .name = #_id,                                                                        \
+        .frames = (_frames),                                                                 \
+        .frame_roles = (_frame_roles),                                                       \
+        .movement_steps = (_movement_steps),                                                 \
+        .frame_x_offsets = (_frame_x_offsets),                                               \
+        .frame_y_offsets = (_frame_y_offsets),                                               \
+        .frame_durations_ms = (_frame_durations_ms),                                         \
+        .frame_count = ARRAY_SIZE(_frames),                                                  \
+        .duration_ms = (_duration_ms),                                                       \
+        .motion = (_motion),                                                                 \
+        .flags = (_flags),                                                                   \
+        .return_step = (_return_step),                                                       \
+        .endpoint_hold_ms = (_endpoint_hold_ms),                                             \
+    }
 
 struct zmk_dongle_animation_band {
     uint8_t min_wpm;

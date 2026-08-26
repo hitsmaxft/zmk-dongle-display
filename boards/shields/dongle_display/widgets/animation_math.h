@@ -168,6 +168,30 @@ static inline uint8_t zmk_dongle_animation_coalesced_frame(
     return selected;
 }
 
+struct zmk_dongle_animation_track_indices {
+    uint8_t character;
+    uint8_t projectile;
+    bool projectile_visible;
+};
+
+static inline void zmk_dongle_animation_resolve_tracks(
+    const uint8_t *frame_roles, uint8_t first_frame, uint8_t last_frame,
+    struct zmk_dongle_animation_track_indices *tracks) {
+    if (tracks == NULL || first_frame > last_frame) {
+        return;
+    }
+    for (uint8_t frame_index = first_frame; frame_index <= last_frame; frame_index++) {
+        uint8_t role = frame_roles != NULL ? frame_roles[frame_index] : 0U;
+        if (role == 1U) {
+            tracks->projectile = frame_index;
+            tracks->projectile_visible = true;
+        } else {
+            tracks->character = frame_index;
+            tracks->projectile_visible = false;
+        }
+    }
+}
+
 static inline int32_t zmk_dongle_animation_origin_x(int32_t screen_width,
                                                      int32_t canvas_width) {
     return screen_width > canvas_width ? screen_width - canvas_width : 0;

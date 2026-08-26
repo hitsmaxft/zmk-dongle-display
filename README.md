@@ -93,7 +93,7 @@ The header path is relative to `ZMK_CONFIG`. Include
 `ZMK_DONGLE_ANIMATION_PACK_WPM4_DEFINE`, and finish with
 `ZMK_DONGLE_ANIMATION_REGISTRY_DEFINE`. Static frame arrays derive their frame count automatically;
 every action must contain 1 to 127 LVGL image descriptors. All packs share the registry canvas size.
-The Provider ABI is version 5. Existing action macros remain source-compatible and default to no
+The Provider ABI is version 9. Existing action macros remain source-compatible and default to no
 motion; moving layouts use `ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_DEFINE`. A moving action may use
 `ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_DEFINE` with a same-length `uint8_t` table:
 zero keeps the previous X position and one advances an equal movement interval. A null table keeps
@@ -103,6 +103,13 @@ For a single forward-then-return action,
 `ZMK_DONGLE_ANIMATION_ACTION_LAYOUT_CADENCE_MOVEMENT_RETURN_DEFINE` adds one return-step boundary.
 Moving steps before it divide travel to the target; moving steps from it onward divide travel back
 to the origin. Per-step data remains only zero/fixed or one/move, with no coordinate script.
+
+`ZMK_DONGLE_ANIMATION_ACTION_TRACKS_DEFINE` adds a same-length role table for generated
+character/projectile timelines. Role zero updates the persistent character and hides the projectile;
+role one retains the character while updating the one persistent projectile image. Both descriptors
+remain in Flash. The player folds skipped 30 Hz steps into final track state and adds no timer,
+canvas, framebuffer, bitmap copy, or per-frame allocation. Registries without role tables do not
+allocate the projectile image object.
 
 Without a custom Provider, `CONFIG_ZMK_DONGLE_DISPLAY_FIGHTER_PACK` adds the built-in `Fighter
 Demo` pack. It reuses the linked Bongo Cat image descriptors while exercising fullscreen Fighter

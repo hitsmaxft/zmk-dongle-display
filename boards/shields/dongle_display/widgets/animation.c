@@ -85,6 +85,24 @@ static int validate_action(const struct zmk_widget_dongle_animation *widget,
         LOG_ERR("Animation action is invalid or has a sub-millisecond frame");
         return -EINVAL;
     }
+    if (action->frame_roles != NULL) {
+        if (action->frame_roles[0] != ZMK_DONGLE_ANIMATION_FRAME_ROLE_CHARACTER) {
+            LOG_ERR("Animation action %s projectile track must start with a character frame",
+                    action->name);
+            return -EINVAL;
+        }
+        for (size_t index = 0; index < action->frame_count; index++) {
+            if (action->frame_roles[index] > ZMK_DONGLE_ANIMATION_FRAME_ROLE_PROJECTILE) {
+                LOG_ERR("Animation action %s frame %u has an invalid role", action->name,
+                        (unsigned int)index);
+                return -EINVAL;
+            }
+        }
+        if (widget->projectile_obj == NULL) {
+            LOG_ERR("Animation action %s requires a projectile image object", action->name);
+            return -ENOMEM;
+        }
+    }
     uint32_t endpoint_duration = 2U * action->endpoint_hold_ms;
     if (action->frame_durations_ms != NULL) {
         uint32_t duration_sum = 0;
@@ -224,6 +242,24 @@ static const struct zmk_dongle_animation_pack *current_pack(void) {
     return zmk_dongle_animation_registry.packs[current_pack_index];
 }
 
+static bool registry_uses_projectile_track(void) {
+    for (size_t pack_index = 0; pack_index < zmk_dongle_animation_registry.pack_count;
+         pack_index++) {
+        const struct zmk_dongle_animation_pack *pack =
+            zmk_dongle_animation_registry.packs[pack_index];
+        if (pack == NULL || pack->actions == NULL) {
+            continue;
+        }
+        for (size_t action_index = 0; action_index < pack->action_count; action_index++) {
+            const struct zmk_dongle_animation_action *action = pack->actions[action_index];
+            if (action != NULL && action->frame_roles != NULL) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static void apply_mode(struct zmk_widget_dongle_animation *widget,
                        const struct zmk_dongle_animation_action *action,
                        bool force_battle_mode) {
@@ -250,6 +286,9 @@ static void apply_mode(struct zmk_widget_dongle_animation *widget,
     lv_obj_move_background(widget->normal_layer);
     lv_obj_move_foreground(widget->battle_hud_layer);
     lv_obj_move_foreground(widget->obj);
+    if (widget->projectile_obj != NULL) {
+        lv_obj_move_foreground(widget->projectile_obj);
+    }
 }
 
 static uint32_t action_frame_period(const struct zmk_widget_dongle_animation *widget,
@@ -282,42 +321,127 @@ static void animation_painted_cb(lv_event_t *event) {
     if (!widget->waiting_for_paint) {
         return;
     }
+    lv_obj_t *expected =
+        widget->waiting_role == ZMK_DONGLE_ANIMATION_FRAME_ROLE_PROJECTILE
+            ? widget->projectile_obj
+            : widget->obj;
+    if (lv_event_get_target(event) != expected) {
+        return;
+    }
     widget->waiting_for_paint = false;
     arm_current_frame_from_now(widget);
 }
 
-static void paint_frame(struct zmk_widget_dongle_animation *widget, uint8_t frame_index) {
-    int32_t x = widget->action->frame_x_offsets != NULL
-                    ? widget->origin_x + widget->action->frame_x_offsets[frame_index]
-                    : zmk_dongle_animation_frame_x_action(
-                          widget->origin_x, widget->target_x, widget->action->movement_steps,
-                          widget->action->frame_count, frame_index, widget->action->return_step);
-    int32_t y = widget->origin_y;
+static uint8_t action_frame_role(const struct zmk_widget_dongle_animation *widget,
+                                 uint8_t frame_index) {
+    return widget->action->frame_roles != NULL
+               ? widget->action->frame_roles[frame_index]
+               : ZMK_DONGLE_ANIMATION_FRAME_ROLE_CHARACTER;
+}
+
+static void action_frame_position(const struct zmk_widget_dongle_animation *widget,
+                                  uint8_t frame_index, int32_t *x, int32_t *y) {
+    int32_t frame_x =
+        widget->action->frame_x_offsets != NULL
+            ? widget->origin_x + widget->action->frame_x_offsets[frame_index]
+            : zmk_dongle_animation_frame_x_action(
+                  widget->origin_x, widget->target_x, widget->action->movement_steps,
+                  widget->action->frame_count, frame_index, widget->action->return_step);
+    int32_t frame_y = widget->origin_y;
     if (widget->action->frame_y_offsets != NULL) {
-        y += widget->action->frame_y_offsets[frame_index];
+        frame_y += widget->action->frame_y_offsets[frame_index];
     }
-    lv_image_set_src(widget->obj, widget->action->frames[frame_index]);
-    lv_obj_set_pos(widget->obj, x, y);
-    widget->frame_index = frame_index;
+    *x = frame_x;
+    *y = frame_y;
+}
+
+static void paint_frame_range(struct zmk_widget_dongle_animation *widget,
+                              uint8_t first_frame, uint8_t last_frame,
+                              bool reset_tracks) {
+    struct zmk_dongle_animation_track_indices tracks = {
+        .character = reset_tracks ? UINT8_MAX : widget->character_frame_index,
+        .projectile = reset_tracks ? UINT8_MAX : widget->projectile_frame_index,
+        .projectile_visible = reset_tracks ? false : widget->projectile_visible,
+    };
+    zmk_dongle_animation_resolve_tracks(widget->action->frame_roles, first_frame,
+                                        last_frame, &tracks);
+    if (tracks.character == UINT8_MAX) {
+        LOG_ERR("Animation %s lost its character track", widget->action->name);
+        lv_timer_pause(widget->timer);
+        return;
+    }
+
+    const void *character_frame = widget->action->frames[tracks.character];
+    int32_t character_x;
+    int32_t character_y;
+    action_frame_position(widget, tracks.character, &character_x, &character_y);
+    const void *projectile_frame = tracks.projectile != UINT8_MAX
+                                       ? widget->action->frames[tracks.projectile]
+                                       : NULL;
+    int32_t projectile_x = widget->projectile_x;
+    int32_t projectile_y = widget->projectile_y;
+    if (tracks.projectile != UINT8_MAX) {
+        action_frame_position(widget, tracks.projectile, &projectile_x, &projectile_y);
+    }
+    bool projectile_visible = tracks.projectile_visible;
+
+    if (character_frame != widget->character_frame) {
+        lv_image_set_src(widget->obj, character_frame);
+    }
+    if (character_x != widget->character_x || character_y != widget->character_y) {
+        lv_obj_set_pos(widget->obj, character_x, character_y);
+    }
+
+    if (widget->projectile_obj != NULL) {
+        if (projectile_frame != NULL && projectile_frame != widget->projectile_frame) {
+            lv_image_set_src(widget->projectile_obj, projectile_frame);
+        }
+        if (projectile_x != widget->projectile_x || projectile_y != widget->projectile_y) {
+            lv_obj_set_pos(widget->projectile_obj, projectile_x, projectile_y);
+        }
+        if (projectile_visible) {
+            lv_obj_clear_flag(widget->projectile_obj, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(widget->projectile_obj, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    widget->character_frame = character_frame;
+    widget->projectile_frame = projectile_frame;
+    widget->character_x = character_x;
+    widget->character_y = character_y;
+    widget->projectile_x = projectile_x;
+    widget->projectile_y = projectile_y;
+    widget->projectile_visible = projectile_visible;
+    widget->character_frame_index = tracks.character;
+    widget->projectile_frame_index = tracks.projectile;
+    widget->frame_index = last_frame;
+    widget->waiting_role = action_frame_role(widget, last_frame);
     widget->waiting_for_paint = zmk_dongle_animation_waits_for_paint(
         widget->action->frame_durations_ms != NULL, widget->action->endpoint_hold_ms,
-        widget->action->frame_count, frame_index);
+        widget->action->frame_count, last_frame);
     if (widget->waiting_for_paint) {
         lv_timer_pause(widget->timer);
+        lv_obj_t *expected =
+            widget->waiting_role == ZMK_DONGLE_ANIMATION_FRAME_ROLE_PROJECTILE
+                ? widget->projectile_obj
+                : widget->obj;
+        lv_obj_invalidate(expected);
     }
 }
 
 static void show_frame_from_now(struct zmk_widget_dongle_animation *widget,
                                 uint8_t frame_index) {
-    paint_frame(widget, frame_index);
+    paint_frame_range(widget, 0, frame_index, true);
     if (!widget->waiting_for_paint) {
         arm_current_frame_from_now(widget);
     }
 }
 
 static void show_frame_until(struct zmk_widget_dongle_animation *widget,
-                             uint8_t frame_index, uint64_t deadline_ms) {
-    paint_frame(widget, frame_index);
+                             uint8_t first_frame, uint8_t last_frame,
+                             uint64_t deadline_ms) {
+    paint_frame_range(widget, first_frame, last_frame, false);
     if (!widget->waiting_for_paint) {
         arm_frame_timer_until(widget, deadline_ms);
     }
@@ -344,6 +468,9 @@ static int start_animation_with_mode(struct zmk_widget_dongle_animation *widget,
     widget->target_x = zmk_dongle_animation_target_x(
         widget->screen_width, first_frame->header.w, action->motion);
     lv_obj_set_size(widget->obj, first_frame->header.w, first_frame->header.h);
+    if (widget->projectile_obj != NULL) {
+        lv_obj_set_size(widget->projectile_obj, first_frame->header.w, first_frame->header.h);
+    }
     apply_mode(widget, action, force_battle_mode);
     show_frame_from_now(widget, 0);
     LOG_INF("Animation %s/%s: %u frames/%ums, x=%d..%d, motion=%u flags=0x%02x", pack->name,
@@ -382,7 +509,7 @@ static void animation_timer_cb(lv_timer_t *timer) {
             widget->action->frame_durations_ms, widget->action->duration_ms,
             widget->action->frame_count, widget->frame_index,
             widget->action->endpoint_hold_ms, now_ms, &next_deadline_ms);
-        show_frame_until(widget, next_frame, next_deadline_ms);
+        show_frame_until(widget, widget->frame_index + 1U, next_frame, next_deadline_ms);
         return;
     }
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_DEMO_MODE)
@@ -601,6 +728,15 @@ int zmk_widget_dongle_animation_init(struct zmk_widget_dongle_animation *widget,
     widget->demo_phase = 0;
 #endif
     widget->waiting_for_paint = false;
+    widget->projectile_visible = false;
+    widget->character_frame_index = UINT8_MAX;
+    widget->projectile_frame_index = UINT8_MAX;
+    widget->character_frame = NULL;
+    widget->projectile_frame = NULL;
+    widget->character_x = INT32_MIN;
+    widget->character_y = INT32_MIN;
+    widget->projectile_x = INT32_MIN;
+    widget->projectile_y = INT32_MIN;
     widget->obj = lv_image_create(parent);
     if (widget->obj == NULL) {
         LOG_ERR("Failed to allocate animation image object");
@@ -611,9 +747,30 @@ int zmk_widget_dongle_animation_init(struct zmk_widget_dongle_animation *widget,
     lv_obj_set_style_bg_opa(widget->obj, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_pad_all(widget->obj, 0, LV_PART_MAIN);
     lv_obj_add_event_cb(widget->obj, animation_painted_cb, LV_EVENT_DRAW_POST, widget);
+    widget->projectile_obj = NULL;
+    if (registry_uses_projectile_track()) {
+        widget->projectile_obj = lv_image_create(parent);
+        if (widget->projectile_obj == NULL) {
+            LOG_ERR("Failed to allocate projectile image object");
+            lv_obj_delete(widget->obj);
+            widget->obj = NULL;
+            return -ENOMEM;
+        }
+        lv_obj_set_size(widget->projectile_obj, zmk_dongle_animation_registry.canvas_width,
+                        zmk_dongle_animation_registry.canvas_height);
+        lv_obj_set_style_bg_opa(widget->projectile_obj, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(widget->projectile_obj, 0, LV_PART_MAIN);
+        lv_obj_add_flag(widget->projectile_obj, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_event_cb(widget->projectile_obj, animation_painted_cb,
+                            LV_EVENT_DRAW_POST, widget);
+    }
     widget->timer = lv_timer_create(animation_timer_cb, 1, widget);
     if (widget->timer == NULL) {
         LOG_ERR("Failed to allocate animation frame timer");
+        if (widget->projectile_obj != NULL) {
+            lv_obj_delete(widget->projectile_obj);
+            widget->projectile_obj = NULL;
+        }
         lv_obj_delete(widget->obj);
         widget->obj = NULL;
         return -ENOMEM;
@@ -627,6 +784,10 @@ int zmk_widget_dongle_animation_init(struct zmk_widget_dongle_animation *widget,
     int err = start_animation(widget, initial_band);
     if (err < 0) {
         lv_timer_delete(widget->timer);
+        if (widget->projectile_obj != NULL) {
+            lv_obj_delete(widget->projectile_obj);
+            widget->projectile_obj = NULL;
+        }
         lv_obj_delete(widget->obj);
         widget->timer = NULL;
         widget->obj = NULL;
@@ -638,6 +799,10 @@ int zmk_widget_dongle_animation_init(struct zmk_widget_dongle_animation *widget,
     if (widget->demo_timer == NULL) {
         LOG_ERR("Failed to allocate animation demo timer");
         lv_timer_delete(widget->timer);
+        if (widget->projectile_obj != NULL) {
+            lv_obj_delete(widget->projectile_obj);
+            widget->projectile_obj = NULL;
+        }
         lv_obj_delete(widget->obj);
         widget->timer = NULL;
         widget->obj = NULL;
@@ -655,4 +820,9 @@ int zmk_widget_dongle_animation_init(struct zmk_widget_dongle_animation *widget,
 
 lv_obj_t *zmk_widget_dongle_animation_obj(struct zmk_widget_dongle_animation *widget) {
     return widget->obj;
+}
+
+lv_obj_t *zmk_widget_dongle_animation_projectile_obj(
+    struct zmk_widget_dongle_animation *widget) {
+    return widget->projectile_obj;
 }
