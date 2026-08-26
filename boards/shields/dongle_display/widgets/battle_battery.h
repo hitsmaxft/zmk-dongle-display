@@ -12,6 +12,7 @@ struct zmk_widget_battle_battery {
     sys_snode_t node;
     lv_obj_t *obj;
     struct zmk_widget_battle_battery_side sides[2];
+    uint8_t transport;
 };
 
 int zmk_widget_battle_battery_init(struct zmk_widget_battle_battery *widget, lv_obj_t *parent);

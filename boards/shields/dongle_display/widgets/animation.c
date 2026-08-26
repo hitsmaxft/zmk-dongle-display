@@ -240,12 +240,41 @@ static void apply_mode(struct zmk_widget_dongle_animation *widget,
         widget->origin_y = widget->screen_height - frame->header.h;
     } else {
         lv_obj_clear_flag(widget->normal_layer, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_move_foreground(widget->normal_layer);
         widget->origin_y = 0;
     }
     if (battle_hud) {
         lv_obj_clear_flag(widget->battle_hud_layer, LV_OBJ_FLAG_HIDDEN);
     }
+
+    /* Bottom to top: normal status, HUD, character ink. */
+    lv_obj_move_background(widget->normal_layer);
+    lv_obj_move_foreground(widget->battle_hud_layer);
+    lv_obj_move_foreground(widget->obj);
+}
+
+static uint32_t action_frame_period(const struct zmk_widget_dongle_animation *widget,
+                                    uint8_t frame_index) {
+    return zmk_dongle_animation_playback_frame_period(
+        widget->action->frame_durations_ms, widget->action->duration_ms,
+        widget->action->frame_count, frame_index, widget->action->endpoint_hold_ms);
+}
+
+static void arm_frame_timer_until(struct zmk_widget_dongle_animation *widget,
+                                  uint64_t deadline_ms) {
+    uint64_t now_ms = (uint64_t)k_uptime_get();
+    uint64_t remaining_ms = deadline_ms > now_ms ? deadline_ms - now_ms : 1U;
+    uint32_t timer_period =
+        remaining_ms > UINT32_MAX ? UINT32_MAX : (uint32_t)remaining_ms;
+    widget->frame_deadline_ms = deadline_ms;
+    lv_timer_set_period(widget->timer, timer_period);
+    lv_timer_reset(widget->timer);
+    lv_timer_resume(widget->timer);
+}
+
+static void arm_current_frame_from_now(struct zmk_widget_dongle_animation *widget) {
+    arm_frame_timer_until(widget,
+                          (uint64_t)k_uptime_get() +
+                              action_frame_period(widget, widget->frame_index));
 }
 
 static void animation_painted_cb(lv_event_t *event) {
@@ -254,11 +283,10 @@ static void animation_painted_cb(lv_event_t *event) {
         return;
     }
     widget->waiting_for_paint = false;
-    lv_timer_reset(widget->timer);
-    lv_timer_resume(widget->timer);
+    arm_current_frame_from_now(widget);
 }
 
-static void show_frame(struct zmk_widget_dongle_animation *widget, uint8_t frame_index) {
+static void paint_frame(struct zmk_widget_dongle_animation *widget, uint8_t frame_index) {
     int32_t x = widget->action->frame_x_offsets != NULL
                     ? widget->origin_x + widget->action->frame_x_offsets[frame_index]
                     : zmk_dongle_animation_frame_x_action(
@@ -271,20 +299,27 @@ static void show_frame(struct zmk_widget_dongle_animation *widget, uint8_t frame
     lv_image_set_src(widget->obj, widget->action->frames[frame_index]);
     lv_obj_set_pos(widget->obj, x, y);
     widget->frame_index = frame_index;
-    uint32_t period = widget->action->frame_durations_ms != NULL
-                          ? widget->action->frame_durations_ms[frame_index]
-                          : zmk_dongle_animation_frame_period(
-                                widget->action->duration_ms, widget->action->frame_count,
-                                frame_index, widget->action->endpoint_hold_ms);
-    lv_timer_set_period(widget->timer, period);
     widget->waiting_for_paint = zmk_dongle_animation_waits_for_paint(
         widget->action->frame_durations_ms != NULL, widget->action->endpoint_hold_ms,
         widget->action->frame_count, frame_index);
     if (widget->waiting_for_paint) {
         lv_timer_pause(widget->timer);
-    } else {
-        lv_timer_reset(widget->timer);
-        lv_timer_resume(widget->timer);
+    }
+}
+
+static void show_frame_from_now(struct zmk_widget_dongle_animation *widget,
+                                uint8_t frame_index) {
+    paint_frame(widget, frame_index);
+    if (!widget->waiting_for_paint) {
+        arm_current_frame_from_now(widget);
+    }
+}
+
+static void show_frame_until(struct zmk_widget_dongle_animation *widget,
+                             uint8_t frame_index, uint64_t deadline_ms) {
+    paint_frame(widget, frame_index);
+    if (!widget->waiting_for_paint) {
+        arm_frame_timer_until(widget, deadline_ms);
     }
 }
 
@@ -310,7 +345,7 @@ static int start_animation_with_mode(struct zmk_widget_dongle_animation *widget,
         widget->screen_width, first_frame->header.w, action->motion);
     lv_obj_set_size(widget->obj, first_frame->header.w, first_frame->header.h);
     apply_mode(widget, action, force_battle_mode);
-    show_frame(widget, 0);
+    show_frame_from_now(widget, 0);
     LOG_INF("Animation %s/%s: %u frames/%ums, x=%d..%d, motion=%u flags=0x%02x", pack->name,
             action->name, action->frame_count, action->duration_ms, widget->origin_x,
             widget->target_x, action->motion, action->flags);
@@ -319,6 +354,10 @@ static int start_animation_with_mode(struct zmk_widget_dongle_animation *widget,
 
 static int start_animation(struct zmk_widget_dongle_animation *widget, size_t band_index) {
     return start_animation_with_mode(widget, band_index, false);
+}
+
+static void restart_animation(struct zmk_widget_dongle_animation *widget) {
+    show_frame_from_now(widget, 0);
 }
 
 #if !IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_DEMO_MODE)
@@ -332,8 +371,18 @@ static bool consume_next_request(void) {
 
 static void animation_timer_cb(lv_timer_t *timer) {
     struct zmk_widget_dongle_animation *widget = lv_timer_get_user_data(timer);
+    uint64_t now_ms = (uint64_t)k_uptime_get();
+    if (now_ms < widget->frame_deadline_ms) {
+        arm_frame_timer_until(widget, widget->frame_deadline_ms);
+        return;
+    }
     if (widget->frame_index + 1 < widget->action->frame_count) {
-        show_frame(widget, widget->frame_index + 1);
+        uint64_t next_deadline_ms = widget->frame_deadline_ms;
+        uint8_t next_frame = zmk_dongle_animation_coalesced_frame(
+            widget->action->frame_durations_ms, widget->action->duration_ms,
+            widget->action->frame_count, widget->frame_index,
+            widget->action->endpoint_hold_ms, now_ms, &next_deadline_ms);
+        show_frame_until(widget, next_frame, next_deadline_ms);
         return;
     }
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_DEMO_MODE)
@@ -355,9 +404,12 @@ static void animation_timer_cb(lv_timer_t *timer) {
     }
 
     uint8_t next_phase = widget->demo_phase + 1;
+    bool pack_changed = false;
     if (next_phase >= ZMK_DONGLE_ANIMATION_CHARGE_DEMO_PHASE_COUNT) {
-        current_pack_index = zmk_dongle_animation_next_index(
+        size_t next_pack_index = zmk_dongle_animation_next_index(
             current_pack_index, zmk_dongle_animation_registry.pack_count);
+        pack_changed = next_pack_index != current_pack_index;
+        current_pack_index = next_pack_index;
         next_phase = 0;
     }
 
@@ -369,7 +421,13 @@ static void animation_timer_cb(lv_timer_t *timer) {
         return;
     }
     bool full_charge_idle = next_phase == 5;
-    int err = start_animation_with_mode(widget, next_band, full_charge_idle);
+    int err = 0;
+    if (zmk_dongle_animation_should_restart_current(
+            pack_changed, full_charge_idle, widget->current_band_index, next_band)) {
+        restart_animation(widget);
+    } else {
+        err = start_animation_with_mode(widget, next_band, full_charge_idle);
+    }
     if (err < 0) {
         LOG_ERR("Failed to advance charged animation demo: %d", err);
         lv_timer_pause(widget->timer);
@@ -387,9 +445,12 @@ static void animation_timer_cb(lv_timer_t *timer) {
     return;
 #else
     size_t completed_band = widget->current_band_index;
+    bool pack_changed = false;
     if (consume_next_request()) {
-        current_pack_index = zmk_dongle_animation_next_index(
+        size_t next_pack_index = zmk_dongle_animation_next_index(
             current_pack_index, zmk_dongle_animation_registry.pack_count);
+        pack_changed = next_pack_index != current_pack_index;
+        current_pack_index = next_pack_index;
     }
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_CHARGE_MODE)
     uint8_t gain = zmk_dongle_animation_charge_gain(completed_band, false);
@@ -412,7 +473,14 @@ static void animation_timer_cb(lv_timer_t *timer) {
         return;
     }
 #endif
-    int err = start_animation(widget, playback_band_for_wpm(current_pack(), latest_wpm));
+    size_t next_band = playback_band_for_wpm(current_pack(), latest_wpm);
+    int err = 0;
+    if (zmk_dongle_animation_should_restart_current(
+            pack_changed, false, widget->current_band_index, next_band)) {
+        restart_animation(widget);
+    } else {
+        err = start_animation(widget, next_band);
+    }
     if (err < 0) {
         LOG_ERR("Failed to advance dongle animation: %d", err);
         lv_timer_pause(widget->timer);
@@ -538,7 +606,6 @@ int zmk_widget_dongle_animation_init(struct zmk_widget_dongle_animation *widget,
         LOG_ERR("Failed to allocate animation image object");
         return -ENOMEM;
     }
-    lv_obj_move_background(widget->obj);
     lv_obj_set_size(widget->obj, zmk_dongle_animation_registry.canvas_width,
                     zmk_dongle_animation_registry.canvas_height);
     lv_obj_set_style_bg_opa(widget->obj, LV_OPA_TRANSP, LV_PART_MAIN);

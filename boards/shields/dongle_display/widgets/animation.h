@@ -23,6 +23,7 @@ struct zmk_widget_dongle_animation {
 #endif
     const struct zmk_dongle_animation_action *action;
     size_t current_band_index;
+    uint64_t frame_deadline_ms;
     uint8_t frame_index;
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_CHARGE_MODE)
     uint8_t charge_level;

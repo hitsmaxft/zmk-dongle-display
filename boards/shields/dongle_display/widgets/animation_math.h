@@ -17,6 +17,11 @@
 #define ZMK_DONGLE_ANIMATION_FAST_BAND 3U
 #define ZMK_DONGLE_ANIMATION_CHARGE_DEMO_PHASE_COUNT 7U
 
+static inline bool zmk_dongle_animation_should_restart_current(
+    bool pack_changed, bool force_battle_mode, size_t current_band, size_t next_band) {
+    return !pack_changed && !force_battle_mode && current_band == next_band;
+}
+
 static inline bool zmk_dongle_animation_waits_for_paint(bool explicit_timing,
                                                          uint16_t endpoint_hold_ms,
                                                          uint8_t frame_count,
@@ -126,6 +131,41 @@ static inline uint32_t zmk_dongle_animation_frame_period(uint32_t duration_ms,
     uint32_t base = duration_ms / frame_count;
     uint32_t remainder = duration_ms % frame_count;
     return base + (frame_index < remainder ? 1U : 0U);
+}
+
+static inline uint32_t zmk_dongle_animation_playback_frame_period(
+    const uint16_t *frame_durations_ms, uint32_t duration_ms, uint8_t frame_count,
+    uint8_t frame_index, uint16_t endpoint_hold_ms) {
+    return frame_durations_ms != NULL
+               ? frame_durations_ms[frame_index]
+               : zmk_dongle_animation_frame_period(
+                     duration_ms, frame_count, frame_index, endpoint_hold_ms);
+}
+
+static inline uint8_t zmk_dongle_animation_coalesced_frame(
+    const uint16_t *frame_durations_ms, uint32_t duration_ms, uint8_t frame_count,
+    uint8_t current_frame, uint16_t endpoint_hold_ms, uint64_t now_ms,
+    uint64_t *frame_deadline_ms) {
+    if (frame_deadline_ms == NULL || frame_count == 0 || current_frame >= frame_count - 1U) {
+        return current_frame;
+    }
+
+    uint8_t selected = current_frame;
+    while (selected + 1U < frame_count) {
+        uint8_t candidate = selected + 1U;
+        uint32_t period = zmk_dongle_animation_playback_frame_period(
+            frame_durations_ms, duration_ms, frame_count, candidate, endpoint_hold_ms);
+        if (period == 0) {
+            break;
+        }
+
+        *frame_deadline_ms += period;
+        selected = candidate;
+        if (now_ms < *frame_deadline_ms) {
+            break;
+        }
+    }
+    return selected;
 }
 
 static inline int32_t zmk_dongle_animation_origin_x(int32_t screen_width,

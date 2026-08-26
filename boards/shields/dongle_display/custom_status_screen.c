@@ -73,7 +73,7 @@ lv_obj_t *zmk_display_status_screen() {
     lv_obj_add_style(screen, &global_style, LV_PART_MAIN);
 
 #if IS_ENABLED(CONFIG_ZMK_DONGLE_DISPLAY_ANIMATION_EXTENSION)
-    /* Bottom to top: character animation, battle HUD, normal dongle status. */
+    /* apply_mode() enforces bottom-to-top: normal status, battle HUD, character ink. */
     /* The widget itself is the top-only HUD layer; avoid an extra LVGL wrapper object. */
     zmk_widget_battle_battery_init(&battle_battery_widget, screen);
     battle_hud_layer = zmk_widget_battle_battery_obj(&battle_battery_widget);
@@ -109,6 +109,9 @@ lv_obj_t *zmk_display_status_screen() {
         LOG_ERR("Failed to initialize fighter charge HUD: %d", charge_err);
     }
 #endif
+    if (animation_err >= 0) {
+        lv_obj_move_foreground(zmk_widget_dongle_animation_obj(&animation_widget));
+    }
 #else
     zmk_widget_bongo_cat_init(&bongo_cat_widget, normal_layer);
     lv_obj_align(zmk_widget_bongo_cat_obj(&bongo_cat_widget), LV_ALIGN_BOTTOM_RIGHT,
